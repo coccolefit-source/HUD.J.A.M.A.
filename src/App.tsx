@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Activity, User, Zap, X } from 'lucide-react';
+import { Activity, User, Zap, X, RotateCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Habit, DailyLog, OneOnOneReview, SportsEntry, Project, ProjectTask, UserSession, UserProfileState, FocusSessionEntry, Idea } from './types';
 import { 
@@ -66,6 +66,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabType>('tracker');
   const [currentThemeId, setCurrentThemeId] = useState<ThemeId>(getStoredTheme());
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Profile & gamification state
   const [profile, setProfile] = useState<UserProfileState>(getStoredUserProfile());
@@ -750,6 +751,50 @@ function App() {
     } catch(err) { console.error(err); setLoading(false); }
   }, []);
 
+  const handleManualRefresh = useCallback(async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      if (isSupabaseConfigured) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await loadAllUserData(session.user.id);
+          setToastNotification("Sincronización de datos completada con Supabase.");
+        } else {
+          window.location.reload();
+        }
+      } else {
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error("Error during manual refresh:", err);
+      setToastNotification("Error al sincronizar datos.");
+    } finally {
+      setTimeout(() => {
+        setIsSyncing(false);
+      }, 600);
+    }
+  }, [isSyncing, loadAllUserData]);
+
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && isSupabaseConfigured) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            await loadAllUserData(session.user.id);
+          }
+        } catch (err) {
+          console.error("Error on visibility revalidation:", err);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadAllUserData]);
+
   useEffect(() => {
     if (!isSupabaseConfigured) {
         setLoading(false);
@@ -864,7 +909,7 @@ function App() {
         onSignOut={handleSignOut}
       />
       <main className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full min-w-0 space-y-6">
-         <header className="bg-[#101827]/90 p-4 md:p-5 rounded-2xl border border-[#06B6D4]/30 shadow-[0_0_20px_rgba(6,182,212,0.1)] backdrop-blur-md relative z-30 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+         <header className="bg-[#101827]/90 p-4 md:p-5 rounded-2xl border border-[#06B6D4]/30 shadow-[0_0_20px_rgba(6,182,212,0.1)] backdrop-blur-md relative z-30 font-mono flex flex-row items-center justify-between gap-4">
            <div className="flex items-center gap-3.5 relative z-50 pointer-events-auto">
              <div className="p-3 rounded-xl bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.25)] shrink-0">
                <Activity className="w-6 h-6 text-[#00F0FF]" />
@@ -879,6 +924,17 @@ function App() {
                </div>
                <p className="text-xs text-slate-400 mt-0.5 font-mono">MODULE // ACTIVE</p>
              </div>
+           </div>
+           <div className="flex items-center gap-2.5 relative z-50 pointer-events-auto">
+             <button
+               type="button"
+               onClick={handleManualRefresh}
+               disabled={isSyncing}
+               className="flex items-center justify-center p-2.5 rounded-xl bg-[#00F0FF]/10 border border-[#00F0FF]/30 text-[#00F0FF] hover:bg-[#00F0FF]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer shadow-[0_0_10px_rgba(0,240,255,0.1)]"
+               title="Sincronizar Datos con la Nube"
+             >
+               <RotateCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+             </button>
            </div>
          </header>
 
