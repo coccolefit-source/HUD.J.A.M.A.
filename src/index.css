@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@layer base {
+  html, body, #root {
+    @apply min-h-screen bg-[#080b11] text-slate-100;
+  }
+}
+
+@layer utilities {
+  .hud-bg-grid {
+    background-color: #0A0D14;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.08) 0%, transparent 70%),
+      linear-gradient(to right, rgba(6, 182, 212, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(6, 182, 212, 0.03) 1px, transparent 1px);
+    background-size: 100% 100%, 36px 36px, 36px 36px;
+  }
+
+  .hud-card {
+    background: rgba(16, 24, 39, 0.82);
+    border: 1px solid rgba(6, 182, 212, 0.22);
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.06), inset 0 0 15px rgba(6, 182, 212, 0.02);
+    backdrop-filter: blur(12px);
+  }
+
+  .hud-card-hover {
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .hud-card-hover:hover {
+    border-color: rgba(6, 182, 212, 0.45);
+    box-shadow: 0 0 25px rgba(6, 182, 212, 0.15), inset 0 0 20px rgba(6, 182, 212, 0.04);
+  }
+
+  .hud-glow-cyan {
+    box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+  }
+
+  .hud-glow-green {
+    box-shadow: 0 0 25px rgba(0, 255, 135, 0.4);
+  }
+
+  .hud-glow-amber {
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
+  }
+
+  .hud-button-tech {
+    background: rgba(16, 24, 39, 0.9);
+    border: 1px solid rgba(6, 182, 212, 0.35);
+    color: #06B6D4;
+    transition: all 0.2s ease;
+  }
+  .hud-button-tech:hover {
+    background: rgba(6, 182, 212, 0.15);
+    border-color: rgba(6, 182, 212, 0.6);
+    box-shadow: 0 0 15px rgba(6, 182, 212, 0.25);
+    color: #38BDF8;
+  }
+}
+
+/* Custom Tactical Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0A0D14;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(6, 182, 212, 0.25);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.5);
+}

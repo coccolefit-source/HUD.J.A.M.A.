@@ -1,0 +1,6 @@
+{
+  "name": "CHECK - Habit Tracker",
+  "description": "Aplicación web de seguimiento de hábitos basada en neurociencia, dopamina táctil y reprogramación mental.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
