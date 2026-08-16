@@ -54,7 +54,6 @@ export const IdeasRadar: React.FC<IdeasRadarProps> = ({
       setFormCategory('PROYECTO');
     } catch (err) {
       console.error("Error inesperado al guardar idea:", err);
-      alert("Ocurrió un error inesperado al registrar la idea.");
     } finally {
       setIsSubmitting(false);
     }

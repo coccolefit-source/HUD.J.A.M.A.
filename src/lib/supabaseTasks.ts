@@ -64,7 +64,7 @@ export async function createCloudTask(task: TaskCloudPayload): Promise<{ success
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      alert("⚠️ ATENCIÓN: No hay sesión detectada en Supabase. Se guardará solo temporalmente.");
+      console.warn("⚠️ ATENCIÓN: No hay sesión detectada en Supabase. Se guardará solo temporalmente.");
       const existing = getGuestTasks();
       const guestTask = { ...task, id: 'guest_' + Date.now(), completed: false };
       saveGuestTasks([...existing, guestTask]);
@@ -89,10 +89,9 @@ export async function createCloudTask(task: TaskCloudPayload): Promise<{ success
 
     if (error) {
       console.error("ERROR EN INSERT [tasks]:", error);
-      alert("🔴 ERROR SUPABASE: " + error.message);
       return { success: false, error };
     } else {
-      alert("✅ TAREA GUARDADA CON ÉXITO EN SUPABASE");
+      console.log("✅ TAREA GUARDADA CON ÉXITO EN SUPABASE");
       if (data && data[0]) {
         return { success: true, data: data[0] };
       }
@@ -101,7 +100,6 @@ export async function createCloudTask(task: TaskCloudPayload): Promise<{ success
     return { success: true };
   } catch (err: any) {
     console.error("Error guardando tarea:", err);
-    alert("🔴 ERROR SUPABASE: " + (err.message || err));
     return { success: false, error: err };
   }
 }

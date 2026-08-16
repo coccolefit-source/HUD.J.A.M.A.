@@ -95,7 +95,6 @@ export const AddEditHabitModal: React.FC<AddEditHabitModalProps> = ({
       onClose();
     } catch (err) {
       console.error("Error al guardar hábito:", err);
-      alert("Ocurrió un error inesperado al guardar el hábito.");
     } finally {
       setIsSubmitting(false);
     }

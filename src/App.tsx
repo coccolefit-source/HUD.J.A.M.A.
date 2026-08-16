@@ -68,6 +68,17 @@ function App() {
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const showToast = useCallback((message: string) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    setToastNotification(message);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastNotification(null);
+    }, 2500);
+  }, []);
+
   // Profile & gamification state
   const [profile, setProfile] = useState<UserProfileState>(getStoredUserProfile());
 
@@ -268,21 +279,21 @@ function App() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        alert("⚠️ ATENCIÓN: No hay sesión detectada en Supabase.");
+        showToast("⚠️ ATENCIÓN: No hay sesión activa.");
         setIsAuthenticated(false);
         return;
       }
       const res = await createCloudIdea(idea);
       if (res.error) {
         console.error("Error al insertar idea en Supabase:", res.error);
-        alert("🔴 ERROR SUPABASE: " + res.error.message);
+        showToast("🔴 Error al guardar idea en Supabase.");
       } else if (res.data) {
         setIdeas(prev => [res.data, ...prev]);
-        alert("✅ IDEA GUARDADA CON ÉXITO EN SUPABASE");
+        showToast("✅ Idea guardada con éxito.");
       }
     } catch (err: any) {
       console.error("Error al guardar idea:", err);
-      alert("🔴 ERROR SUPABASE: " + (err.message || err));
+      showToast("🔴 Error: " + (err.message || err));
     }
   };
 
@@ -290,20 +301,21 @@ function App() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        alert("⚠️ ATENCIÓN: No hay sesión detectada en Supabase.");
+        showToast("⚠️ ATENCIÓN: No hay sesión activa.");
         setIsAuthenticated(false);
         return;
       }
       const res = await deleteCloudIdea(ideaId);
       if (res.error) {
         console.error("Error al eliminar idea:", res.error);
-        alert("🔴 ERROR SUPABASE: " + res.error);
+        showToast("🔴 Error al eliminar idea.");
       } else {
         setIdeas(prev => prev.filter(i => i.id !== ideaId));
+        showToast("✅ Idea eliminada.");
       }
     } catch (e: any) {
       console.error("Error al eliminar idea:", e);
-      alert("🔴 ERROR SUPABASE: " + (e.message || e));
+      showToast("🔴 Error: " + (e.message || e));
     }
   };
 
@@ -437,7 +449,7 @@ function App() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        alert("⚠️ ATENCIÓN: No hay sesión detectada en Supabase.");
+        showToast("⚠️ ATENCIÓN: No hay sesión activa.");
         setIsAuthenticated(false);
         return;
       }
@@ -510,7 +522,7 @@ function App() {
       }, dateStr);
     } catch (err: any) {
       console.error("Error al conmutar estado del hábito:", err);
-      alert("🔴 ERROR SUPABASE: " + (err.message || err));
+      showToast("🔴 Error al actualizar el hábito.");
     }
   };
 
@@ -950,6 +962,21 @@ function App() {
       <ThemeSelectorModal isOpen={isThemeModalOpen} onClose={() => setIsThemeModalOpen(false)} currentThemeId={currentThemeId} onSelectTheme={handleSelectTheme} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} userSession={userSession} onUpdateUserSession={handleUpdateUserSession} onInitializeOperator={handleInitializeOperator} onAuthSuccess={loadAllUserData} onPlayWelcomeVoice={handlePlayWelcomeVoice} onSignOut={handleSignOut} isClosable={true} />
       <ResetPasswordModal isOpen={isResetPasswordModalOpen} onClose={() => setIsResetPasswordModalOpen(false)} onSuccess={() => {}} />
+
+      <AnimatePresence>
+        {toastNotification && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 15, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-[#101827] border border-[#00F0FF]/40 text-[#00F0FF] shadow-[0_0_20px_rgba(0,240,255,0.15)] font-mono text-xs tracking-wide pointer-events-none"
+          >
+            <span className="w-2 h-2 rounded-full bg-[#00F0FF] shadow-[0_0_8px_#00F0FF] animate-pulse"></span>
+            {toastNotification}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

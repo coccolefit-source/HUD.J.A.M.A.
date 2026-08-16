@@ -284,7 +284,6 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
 
         if (res.error) {
           console.error("Error al guardar en Supabase:", res.error);
-          alert("Error de Supabase: " + res.error.message);
         } else {
           console.log("¡Guardado exitoso en la nube! Datos:", res.data);
           // Opcional: mostrar notificación o simplemente dejar que `fetchInitialData` lo refresque
@@ -326,7 +325,6 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
       }, 4000);
     } catch (err) {
       console.error("Error inesperado al guardar tarea:", err);
-      alert("Ocurrió un error inesperado al guardar la tarea.");
     } finally {
       setIsSubmittingTask(false);
     }

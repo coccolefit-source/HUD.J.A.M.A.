@@ -165,7 +165,6 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       setIsModalOpen(false);
     } catch (err) {
       console.error("Error inesperado al guardar proyecto:", err);
-      alert("Ocurrió un error inesperado al guardar el proyecto.");
     } finally {
       setIsSubmitting(false);
     }
