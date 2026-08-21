@@ -31,6 +31,7 @@ export interface Habit {
   completed?: boolean;
   streak?: number;
   lastCompletedAt?: string | null;
+  order?: number;
 }
 
 export type SportType = 'Ciclismo' | 'Running' | 'Fútbol' | 'Natación' | 'Gimnasio' | 'Caminata' | 'Padel / Tenis' | 'Otros';

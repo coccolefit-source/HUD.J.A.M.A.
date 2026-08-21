@@ -47,7 +47,7 @@ import { getStoredTheme, saveStoredTheme, ThemeId, THEMES } from './theme';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { fetchCloudTasks, createCloudTask, updateCloudTask, deleteCloudTask, syncProjectTasksToCloud } from './lib/supabaseTasks';
 import { fetchCloudHabits, createCloudHabit, updateCloudHabit, deleteCloudHabit } from './lib/supabaseHabits';
-import { fetchCloudIdeas, createCloudIdea, deleteCloudIdea } from './lib/supabaseIdeas';
+import { fetchCloudIdeas, createCloudIdea, deleteCloudIdea, updateCloudIdea } from './lib/supabaseIdeas';
 import { fetchCloudProjects, createCloudProject, updateCloudProject, deleteCloudProject } from './lib/supabaseProjects';
 import { fetchCloudDailyLogs, upsertCloudDailyLog } from './lib/supabaseDailyLogs';
 
@@ -297,6 +297,31 @@ function App() {
     }
   };
 
+  const handleUpdateIdea = async (ideaId: string, updates: Partial<Idea>) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        showToast("⚠️ ATENCIÓN: No hay sesión activa.");
+        setIsAuthenticated(false);
+        return;
+      }
+      const res = await updateCloudIdea(ideaId, updates);
+      if (res.error) {
+        console.error("Error al actualizar idea en Supabase:", res.error);
+        showToast("🔴 Error al actualizar la idea.");
+      } else if (res.data) {
+        setIdeas(prev => prev.map(i => i.id === ideaId ? { ...i, ...res.data } : i));
+        showToast("✅ Idea actualizada con éxito.");
+      } else {
+        setIdeas(prev => prev.map(i => i.id === ideaId ? { ...i, ...updates } : i));
+        showToast("✅ Idea actualizada.");
+      }
+    } catch (err: any) {
+      console.error("Error al actualizar idea:", err);
+      showToast("🔴 Error: " + (err.message || err));
+    }
+  };
+
   const handleDeleteIdea = async (ideaId: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -445,6 +470,7 @@ function App() {
   const handleToggleHabit = async (arg1: string, arg2?: string) => {
     const habitId = arg2 ? arg2 : arg1;
     const dateStr = arg2 ? arg1 : getTodayISO();
+    const isToday = dateStr === getTodayISO();
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -461,56 +487,52 @@ function App() {
         isClosed: false
       };
 
-      const isCompletedInLog = (activeLog.completedHabitIds || []).includes(habitId);
-      const isCurrentlyCompleted = typeof targetHabit?.completed === 'boolean'
-        ? targetHabit.completed
-        : isCompletedInLog;
-
-      const newCompletedState = !isCurrentlyCompleted;
-      const currentStreak = Number(targetHabit?.streak || 0);
-      const newStreak = newCompletedState ? currentStreak + 1 : Math.max(0, currentStreak - 1);
-      const newLastCompletedAt = newCompletedState ? new Date().toISOString() : null;
-
-      const finalCompleted = newCompletedState;
-      const finalStreak = newStreak;
-      const finalLastCompletedAt = newLastCompletedAt;
-
-      setHabits(prev => prev.map(h => String(h.id) === String(habitId) ? {
-        ...h,
-        completed: finalCompleted,
-        streak: finalStreak,
-        lastCompletedAt: finalLastCompletedAt
-      } : h));
-
       const currentCompletedIds = activeLog.completedHabitIds || [];
-      const updatedCompletedIds = finalCompleted
+      const isCurrentlyCompleted = currentCompletedIds.includes(habitId);
+      const newCompletedState = !isCurrentlyCompleted;
+
+      const updatedCompletedIds = newCompletedState
         ? Array.from(new Set([...currentCompletedIds, habitId]))
         : currentCompletedIds.filter(id => id !== habitId);
 
       const activeHabits = habits.filter(h => !h.archived);
       const totalHabits = activeHabits.length;
-      const validCompleted = activeHabits.filter(h => updatedCompletedIds.includes(h.id) || (h.id === habitId ? finalCompleted : Boolean(h.completed))).length;
+      const validCompleted = activeHabits.filter(h => updatedCompletedIds.includes(h.id)).length;
       const rate = totalHabits > 0 ? Math.min(100, Math.round((validCompleted / totalHabits) * 100)) : 0;
 
-      if (finalCompleted) {
-        addXP(10);
-      }
+      // Actualizar información y racha de hábito si la fecha es hoy
+      if (isToday) {
+        const currentStreak = Number(targetHabit?.streak || 0);
+        const newStreak = newCompletedState ? currentStreak + 1 : Math.max(0, currentStreak - 1);
+        const newLastCompletedAt = newCompletedState ? new Date().toISOString() : null;
 
-      // Background request
-      supabase
-        .from('habits')
-        .update({ 
+        setHabits(prev => prev.map(h => String(h.id) === String(habitId) ? {
+          ...h,
           completed: newCompletedState,
           streak: newStreak,
-          last_completed_at: newLastCompletedAt
-        })
-        .eq('id', habitId)
-        .eq('user_id', user.id)
-        .then(({ error }) => {
-          if (error) {
-            console.error('Error al actualizar hábito (background):', error);
-          }
-        });
+          lastCompletedAt: newLastCompletedAt
+        } : h));
+
+        // Petición en segundo plano para actualizar racha en Supabase
+        supabase
+          .from('habits')
+          .update({ 
+            completed: newCompletedState,
+            streak: newStreak,
+            last_completed_at: newLastCompletedAt
+          })
+          .eq('id', habitId)
+          .eq('user_id', user.id)
+          .then(({ error }) => {
+            if (error) {
+              console.error('Error al actualizar hábito (background):', error);
+            }
+          });
+      }
+
+      if (newCompletedState) {
+        addXP(10);
+      }
 
       updateLogs({
         ...logs,
@@ -525,6 +547,30 @@ function App() {
       showToast("🔴 Error al actualizar el hábito.");
     }
   };
+
+  const handleMoveHabit = useCallback((habitId: string, direction: 'up' | 'down') => {
+    setHabits(prev => {
+      const idx = prev.findIndex(h => h.id === habitId);
+      if (idx === -1) return prev;
+      if (direction === 'up' && idx === 0) return prev;
+      if (direction === 'down' && idx === prev.length - 1) return prev;
+
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+      const newHabits = [...prev];
+      const [moved] = newHabits.splice(idx, 1);
+      newHabits.splice(targetIdx, 0, moved);
+
+      // Persistir orden en localStorage
+      try {
+        const orderIds = newHabits.map(h => h.id);
+        localStorage.setItem('habitpulse_habits_order_v1', JSON.stringify(orderIds));
+      } catch (err) {
+        console.error("Error al persistir orden de hábitos:", err);
+      }
+
+      return newHabits;
+    });
+  }, []);
 
   const handleSaveHabit = async (habitData: Partial<Habit>) => {
     try {
@@ -715,23 +761,49 @@ function App() {
       ]);
 
       if (habitsRes.data) {
-        setHabits(habitsRes.data.map((r: any) => ({
+        let loadedHabits = habitsRes.data.map((r: any) => ({
           id: String(r.id), title: r.title, description: r.description,
           category: r.category, color: r.color, icon: r.icon,
           targetDaysPerWeek: r.target_days || r.frequency || 7,
           createdAt: r.created_at, completed: Boolean(r.completed),
           streak: Number(r.streak), lastCompletedAt: r.last_completed_at, archived: Boolean(r.archived),
           daysOfWeek: r.days_of_week || []
-        })));
+        }));
+
+        try {
+          const orderStr = localStorage.getItem('habitpulse_habits_order_v1');
+          if (orderStr) {
+            const orderIds: string[] = JSON.parse(orderStr);
+            loadedHabits = loadedHabits.sort((a, b) => {
+              const idxA = orderIds.indexOf(a.id);
+              const idxB = orderIds.indexOf(b.id);
+              if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+              if (idxA !== -1) return -1;
+              if (idxB !== -1) return 1;
+              return 0;
+            });
+          }
+        } catch { }
+
+        setHabits(loadedHabits);
       }
       
-      const allTasks = (tasksRes.data || []).map((t: any) => ({
-        id: String(t.id),
-        projectId: String(t.project_id),
-        title: t.title,
-        completed: Boolean(t.completed || t.status === 'completed'),
-        dueDate: t.due_date || t.date || undefined
-      }));
+      // Desduplicar tareas cargadas de Supabase para evitar repeticiones
+      const seenTaskKeys = new Set<string>();
+      const allTasks: any[] = [];
+      for (const t of (tasksRes.data || [])) {
+        const taskKey = `${t.project_id}_${t.title}_${t.due_date || t.date || ''}`;
+        if (!seenTaskKeys.has(taskKey)) {
+          seenTaskKeys.add(taskKey);
+          allTasks.push({
+            id: String(t.id),
+            projectId: String(t.project_id),
+            title: t.title,
+            completed: Boolean(t.completed || t.status === 'completed'),
+            dueDate: t.due_date || t.date || undefined
+          });
+        }
+      }
 
       if (projectsRes.data) {
          setProjects(projectsRes.data.map((r: any) => {
@@ -950,13 +1022,13 @@ function App() {
            </div>
          </header>
 
-         {activeTab === 'tracker' && <DailyTracker habits={habits} logs={logs} projects={projects} onSaveProject={handleSaveProject} onToggleHabit={handleToggleHabit} onSaveHabit={handleSaveHabit} onDeleteHabit={handleDeleteHabit} onCloseDay={handleCloseDay} onSaveDailyWins={handleSaveDailyWins} onSaveSportsEntry={handleSaveSportsEntry} onDeleteSportsEntry={handleDeleteSportsEntry} calculateStreak={calculateStreak} />}
+         {activeTab === 'tracker' && <DailyTracker habits={habits} logs={logs} projects={projects} onSaveProject={handleSaveProject} onToggleHabit={handleToggleHabit} onSaveHabit={handleSaveHabit} onDeleteHabit={handleDeleteHabit} onCloseDay={handleCloseDay} onSaveDailyWins={handleSaveDailyWins} onSaveSportsEntry={handleSaveSportsEntry} onDeleteSportsEntry={handleDeleteSportsEntry} onMoveHabit={handleMoveHabit} calculateStreak={calculateStreak} />}
          {activeTab === 'exec' && <ExecCenter projects={projects} onSaveProject={handleSaveProject} onUpdateProjects={setProjects} />}
          {activeTab === 'projects' && <ProjectsManager projects={projects} onSaveProject={handleSaveProject} onDeleteProject={handleDeleteProject} />}
          {activeTab === 'analytics' && <AnalyticsTrends habits={habits} logs={logs} calculateStreak={calculateStreak} />}
          {activeTab === 'review' && <ReviewInsights habits={habits} logs={logs} reviews={reviews} onSaveReview={handleSaveReview} />}
          {activeTab === 'focus' && <FocusTimer onFocusSessionComplete={handleFocusSessionComplete} todaySessions={logs[getTodayISO()]?.focusSessions || []} />}
-         {activeTab === 'ideas' && <IdeasRadar ideas={ideas} onSaveIdea={handleSaveIdea} onDeleteIdea={handleDeleteIdea} onConvertToProject={handleConvertIdeaToProject} />}
+         {activeTab === 'ideas' && <IdeasRadar ideas={ideas} onSaveIdea={handleSaveIdea} onUpdateIdea={handleUpdateIdea} onDeleteIdea={handleDeleteIdea} onConvertToProject={handleConvertIdeaToProject} />}
       </main>
 
       <ThemeSelectorModal isOpen={isThemeModalOpen} onClose={() => setIsThemeModalOpen(false)} currentThemeId={currentThemeId} onSelectTheme={handleSelectTheme} />

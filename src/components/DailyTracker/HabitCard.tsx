@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Check, Flame, MoreVertical, Edit3, Trash2 } from 'lucide-react';
+import { Check, Flame, MoreVertical, Edit3, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Habit } from '../../types';
 import { IconRenderer } from '../IconRenderer';
@@ -12,6 +12,10 @@ interface HabitCardProps {
   onToggle: (habitId: string) => void;
   onEdit: (habit: Habit) => void;
   onDelete: (habitId: string) => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }
 
 // Dopamine audio feedback via Web Audio API
@@ -46,7 +50,11 @@ export const HabitCard: React.FC<HabitCardProps> = ({
   streakCount,
   onToggle,
   onEdit,
-  onDelete
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp = false,
+  canMoveDown = false
 }) => {
   const [showMenu, setShowMenu] = React.useState(false);
 
@@ -176,8 +184,40 @@ export const HabitCard: React.FC<HabitCardProps> = ({
           </div>
         </div>
 
-        {/* Right side: Interactive CHECK button & menu */}
+        {/* Right side: Reorder controls + Interactive CHECK button & menu */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Quick Reorder Up/Down Buttons */}
+          {(onMoveUp || onMoveDown) && (
+            <div className="flex flex-col gap-0.5 mr-1" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                disabled={!canMoveUp}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveUp?.();
+                }}
+                className="p-1 rounded-md text-slate-500 hover:text-[#00F0FF] hover:bg-[#00F0FF]/10 disabled:opacity-20 disabled:pointer-events-none transition-colors"
+                title="Subir hábito"
+                aria-label="Subir hábito"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                disabled={!canMoveDown}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveDown?.();
+                }}
+                className="p-1 rounded-md text-slate-500 hover:text-[#00F0FF] hover:bg-[#00F0FF]/10 disabled:opacity-20 disabled:pointer-events-none transition-colors"
+                title="Bajar hábito"
+                aria-label="Bajar hábito"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           <motion.button
             type="button"
             whileTap={{ scale: 0.82 }}
@@ -207,9 +247,31 @@ export const HabitCard: React.FC<HabitCardProps> = ({
 
             {showMenu && (
               <div
-                className="absolute right-0 top-10 z-20 w-36 bg-[#101827] border border-[#06B6D4]/40 rounded-xl shadow-2xl p-1 text-xs"
+                className="absolute right-0 top-10 z-20 w-40 bg-[#101827] border border-[#06B6D4]/40 rounded-xl shadow-2xl p-1 text-xs"
                 onClick={(e) => e.stopPropagation()}
               >
+                {canMoveUp && onMoveUp && (
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      onMoveUp();
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-slate-300 hover:bg-[#06B6D4]/15 hover:text-[#06B6D4] rounded-lg text-left transition-colors font-mono"
+                  >
+                    <ChevronUp className="w-3.5 h-3.5 text-[#06B6D4]" /> Subir orden
+                  </button>
+                )}
+                {canMoveDown && onMoveDown && (
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      onMoveDown();
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-slate-300 hover:bg-[#06B6D4]/15 hover:text-[#06B6D4] rounded-lg text-left transition-colors font-mono"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5 text-[#06B6D4]" /> Bajar orden
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setShowMenu(false);

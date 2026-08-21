@@ -37,6 +37,7 @@ interface DailyTrackerProps {
   onToggleHabit: (dateStr: string, habitId: string) => void;
   onSaveHabit: (habitData: Partial<Habit>) => void;
   onDeleteHabit: (habitId: string) => void;
+  onMoveHabit?: (habitId: string, direction: 'up' | 'down') => void;
   onCloseDay: (dateStr: string) => void;
   onSaveDailyWins?: (dateStr: string, wins: string[]) => void;
   onSaveSportsEntry?: (dateStr: string, entry: SportsEntry) => void;
@@ -54,6 +55,7 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   onToggleHabit,
   onSaveHabit,
   onDeleteHabit,
+  onMoveHabit,
   onCloseDay,
   onSaveDailyWins,
   onSaveSportsEntry,
@@ -200,7 +202,7 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   );
 
   const execTodayCompletedCount = execTodayTasks.filter(item => item.task.completed).length;
-  const validCompletedHabitsCount = scheduledHabitsToday.filter(h => completedIds.includes(h.id) || Boolean(h.completed)).length;
+  const validCompletedHabitsCount = scheduledHabitsToday.filter(h => completedIds.includes(h.id)).length;
   const totalCount = scheduledHabitsToday.length + execTodayTasks.length;
   const completedCount = Math.min(totalCount, validCompletedHabitsCount + execTodayCompletedCount);
   const completionRate = totalCount > 0 ? Math.min(100, Math.round((completedCount / totalCount) * 100)) : 0;
@@ -433,8 +435,11 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
         <AnimatePresence mode="popLayout">
           {(filteredHabits || []).length > 0 ? (
             (filteredHabits || []).map((habit) => {
-              const isCompleted = completedIds.includes(habit.id) || Boolean(habit.completed);
+              const isCompleted = completedIds.includes(habit.id);
               const streak = typeof habit.streak === 'number' ? habit.streak : calculateStreak(habit.id, selectedDate);
+              const idxInHabits = habits.findIndex(h => h.id === habit.id);
+              const canMoveUp = idxInHabits > 0;
+              const canMoveDown = idxInHabits !== -1 && idxInHabits < habits.length - 1;
 
               return (
                 <HabitCard
@@ -445,6 +450,10 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
                   onToggle={(hId) => onToggleHabit(selectedDate, hId)}
                   onEdit={openEdit}
                   onDelete={onDeleteHabit}
+                  onMoveUp={onMoveHabit ? () => onMoveHabit(habit.id, 'up') : undefined}
+                  onMoveDown={onMoveHabit ? () => onMoveHabit(habit.id, 'down') : undefined}
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
                 />
               );
             })

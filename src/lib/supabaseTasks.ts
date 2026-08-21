@@ -192,7 +192,7 @@ export async function deleteCloudTask(taskId: string): Promise<{ success: boolea
 }
 
 /**
- * Sincroniza proyectos/tareas hacia Supabase
+ * Sincroniza proyectos/tareas hacia Supabase sin duplicar tareas existentes
  */
 export async function syncProjectTasksToCloud(project: Project): Promise<void> {
   if (!isSupabaseConfigured || String(project.id).startsWith('guest_')) return;
@@ -202,10 +202,25 @@ export async function syncProjectTasksToCloud(project: Project): Promise<void> {
 
     if (project.tasks && project.tasks.length > 0) {
       for (const t of project.tasks) {
-        if (!String(t.id).startsWith('guest_')) {
-          await createCloudTask({
+        if (String(t.id).startsWith('guest_')) continue;
+
+        const isTempId = String(t.id).startsWith('pt-') || String(t.id).startsWith('temp-');
+        if (isTempId) {
+          // Nueva tarea agregada: insertar en Supabase
+          const res = await createCloudTask({
             title: t.title,
-            completed: t.completed,
+            completed: Boolean(t.completed),
+            dueDate: t.dueDate,
+            projectId: project.id
+          });
+          if (res.data && res.data.id) {
+            t.id = String(res.data.id);
+          }
+        } else {
+          // Tarea ya existente: actualizar en Supabase
+          await updateCloudTask(t.id, {
+            title: t.title,
+            completed: Boolean(t.completed),
             dueDate: t.dueDate,
             projectId: project.id
           });

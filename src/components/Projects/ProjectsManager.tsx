@@ -161,7 +161,6 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       };
 
       onSaveProject(updatedProject);
-      syncProjectTasksToCloud(updatedProject);
       setIsModalOpen(false);
     } catch (err) {
       console.error("Error inesperado al guardar proyecto:", err);

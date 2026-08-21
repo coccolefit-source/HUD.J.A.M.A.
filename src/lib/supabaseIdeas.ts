@@ -112,3 +112,53 @@ export async function deleteCloudIdea(ideaId: string): Promise<{ success: boolea
     return { success: false, error: err?.message || 'Error eliminando idea en Supabase' };
   }
 }
+
+/**
+ * 4. Actualizar idea existente en Supabase con await
+ */
+export async function updateCloudIdea(ideaId: string, updates: Partial<Idea>): Promise<{ success: boolean; data?: any; error?: any }> {
+  if (!isSupabaseConfigured) {
+    return { success: true };
+  }
+
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error("Error al actualizar idea: Usuario no autenticado", userError);
+      return { success: false, error: 'Usuario no autenticado' };
+    }
+
+    const payload: any = {};
+    if (updates.title !== undefined) payload.title = updates.title;
+    if (updates.notes !== undefined) payload.notes = updates.notes || '';
+    if (updates.category !== undefined) payload.category = updates.category;
+
+    const { data, error } = await supabase
+      .from('ideas')
+      .update(payload)
+      .eq('id', ideaId)
+      .eq('user_id', user.id)
+      .select();
+
+    if (error) {
+      console.error("Error al actualizar idea en Supabase:", error);
+      return { success: false, error };
+    }
+
+    const updatedRow = data && data[0];
+    return { 
+      success: true, 
+      data: updatedRow ? {
+        id: String(updatedRow.id),
+        title: updatedRow.title,
+        notes: updatedRow.notes || undefined,
+        category: updatedRow.category,
+        createdAt: updatedRow.created_at || new Date().toISOString()
+      } : null
+    };
+  } catch (err: any) {
+    console.error("Error al actualizar idea:", err);
+    return { success: false, error: err };
+  }
+}
+
