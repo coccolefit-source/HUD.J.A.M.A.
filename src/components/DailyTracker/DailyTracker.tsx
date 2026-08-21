@@ -436,7 +436,7 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
           {(filteredHabits || []).length > 0 ? (
             (filteredHabits || []).map((habit) => {
               const isCompleted = completedIds.includes(habit.id);
-              const streak = typeof habit.streak === 'number' ? habit.streak : calculateStreak(habit.id, selectedDate);
+              const streak = calculateStreak(habit.id, selectedDate);
               const idxInHabits = habits.findIndex(h => h.id === habit.id);
               const canMoveUp = idxInHabits > 0;
               const canMoveDown = idxInHabits !== -1 && idxInHabits < habits.length - 1;

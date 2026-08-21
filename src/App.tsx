@@ -102,6 +102,19 @@ function App() {
   const calculateStreak = useCallback((habitId: string, uptoDate: string): number => {
     let streak = 0;
     let currentDate = parseISODate(uptoDate);
+    
+    // Si la fecha seleccionada es hoy y el hábito no está completado hoy,
+    // calculamos la racha empezando desde ayer para que la racha no se muestre como 0
+    // antes de que el usuario marque el hábito hoy.
+    const todayStr = getTodayISO();
+    if (uptoDate === todayStr) {
+      const logToday = logs[todayStr];
+      const completedToday = logToday?.completedHabitIds?.includes(habitId);
+      if (!completedToday) {
+        currentDate.setDate(currentDate.getDate() - 1);
+      }
+    }
+
     while (true) {
       const dateStr = formatDateToISO(currentDate);
       const log = logs[dateStr];
@@ -502,8 +515,32 @@ function App() {
 
       // Actualizar información y racha de hábito si la fecha es hoy
       if (isToday) {
-        const currentStreak = Number(targetHabit?.streak || 0);
-        const newStreak = newCompletedState ? currentStreak + 1 : Math.max(0, currentStreak - 1);
+        let newStreak = 0;
+        let checkDate = parseISODate(dateStr);
+        if (!newCompletedState) {
+          checkDate.setDate(checkDate.getDate() - 1);
+        }
+        while (true) {
+          const checkDateStr = formatDateToISO(checkDate);
+          if (checkDateStr === dateStr) {
+            if (newCompletedState) {
+              newStreak++;
+              checkDate.setDate(checkDate.getDate() - 1);
+            } else {
+              break;
+            }
+          } else {
+            const checkLog = logs[checkDateStr];
+            const isCompletedInCheckLog = checkLog?.completedHabitIds?.includes(habitId);
+            if (isCompletedInCheckLog) {
+              newStreak++;
+              checkDate.setDate(checkDate.getDate() - 1);
+            } else {
+              break;
+            }
+          }
+        }
+
         const newLastCompletedAt = newCompletedState ? new Date().toISOString() : null;
 
         setHabits(prev => prev.map(h => String(h.id) === String(habitId) ? {
