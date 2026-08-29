@@ -4,9 +4,7 @@ import {
   X, 
   ShieldCheck, 
   UserCheck, 
-  CloudUpload, 
   HardDrive, 
-  Sparkles, 
   Key, 
   Mail, 
   CheckCircle2, 
@@ -20,7 +18,7 @@ import {
   Globe
 } from 'lucide-react';
 import { UserSession } from '../../types';
-import { supabase, isSupabaseConfigured, migrateGuestDataToCloud } from '../../lib/supabase';
+import { supabase, isSupabaseConfigured, migrateGuestDataToCloud, supabaseUrl, supabaseAnonKey } from '../../lib/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -45,10 +43,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSignOut,
   isClosable = true
 }) => {
-  const [activeTab, setActiveTab] = useState<'guest' | 'account'>('account');
-  const [authMode, setAuthMode] = useState<'signup' | 'signin' | 'recovery'>('signup');
-  const [hudInput, setHudInput] = useState(userSession?.hudName || 'HUD INVITADO');
-  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [authMode, setAuthMode] = useState<'signup' | 'signin' | 'recovery'>('signin');
 
   // Form states for tactical registration & recovery
   const [alias, setAlias] = useState(userSession?.alias || '');
@@ -65,24 +60,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (userSession) {
       setAlias(userSession.alias || '');
       setEmail(userSession.email || '');
-      setHudInput(userSession.hudName || 'HUD INVITADO');
     }
   }, [userSession]);
 
   if (!isOpen) return null;
-
-  const handleSaveHudName = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!hudInput.trim()) return;
-    const updated = {
-      ...(userSession || {}),
-      hudName: hudInput.trim().toUpperCase(),
-      updatedAt: new Date().toISOString()
-    } as UserSession;
-    onUpdateUserSession(updated);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2000);
-  };
 
   const handleUpdateProfileAlias = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,7 +129,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
+    setRecoverySuccessMsg(null);
     if (!email.trim() || !password.trim()) return;
+
+    if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.trim() === '' || supabaseAnonKey.trim() === '') {
+      setAuthError('Faltan credenciales de Supabase (URL o Anon Key).');
+      return;
+    }
 
     setIsLoading(true);
 
@@ -160,37 +147,50 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       if (isSupabaseConfigured) {
         let authUser = null;
+        
         if (authMode === 'signup') {
-          const { data, error } = await supabase.auth.signUp({
+          const authAction = supabase.auth.signUp({
             email: email.trim(),
             password: password.trim(),
-            options: {
-              data: {
-                alias: formattedAlias
-              }
-            }
+            options: { data: { alias: formattedAlias } }
           });
+
+          const timeoutPromise = new Promise<{ data: any; error: any }>((_, reject) =>
+            setTimeout(() => reject(new Error('TIMEOUT')), 10000)
+          );
+
+          const { data, error } = await Promise.race([authAction, timeoutPromise]);
 
           if (error) {
             throw new Error(error.message);
           }
 
-          if (data.user) {
+          if (data?.user) {
+            if (!data.session) {
+              setRecoverySuccessMsg('Cuenta creada con éxito. Por favor, revisa tu correo electrónico para verificar tu cuenta e iniciar sesión.');
+              return;
+            }
             authUser = data.user;
             await migrateGuestDataToCloud(data.user.id);
           }
         } else {
           // Sign In
-          const { data, error } = await supabase.auth.signInWithPassword({
+          const authAction = supabase.auth.signInWithPassword({
             email: email.trim(),
             password: password.trim()
           });
+
+          const timeoutPromise = new Promise<{ data: any; error: any }>((_, reject) =>
+            setTimeout(() => reject(new Error('TIMEOUT')), 10000)
+          );
+
+          const { data, error } = await Promise.race([authAction, timeoutPromise]);
 
           if (error) {
             throw new Error(error.message);
           }
 
-          if (data.user) {
+          if (data?.user) {
             authUser = data.user;
             await migrateGuestDataToCloud(data.user.id);
           }
@@ -223,7 +223,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }, 1200);
 
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Error de autenticación táctica.';
+      let errorMessage = 'Error de autenticación.';
+      if (err instanceof Error) {
+        if (err.message === 'TIMEOUT') {
+          errorMessage = 'Error de conexión con Supabase. Verifica tu red o tus credenciales.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
       setAuthError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -370,7 +377,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       ) : (
                         <>
                           <HardDrive className="w-4 h-4" />
-                          💾 GUARDAR ALIAS
+                          GUARDAR ALIAS
                         </>
                       )}
                     </button>
@@ -392,285 +399,224 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </form>
               </div>
             ) : (
-              // GUEST ACCESS & AUTH FORMS
+              // AUTH MODES (Signup / Signin / Recovery)
               <div className="space-y-4">
-                {/* Selector de modo: Invitado Offline o Cuenta en Supabase */}
-                <div className="flex bg-[#0F172A] p-1 rounded-xl border border-slate-800 text-xs font-mono">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('account')}
-                    className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer ${
-                      activeTab === 'account'
-                        ? 'bg-[#00FFCC]/20 text-[#00FFCC] border border-[#00FFCC]/30'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    ☁️ Sincronizar Cuenta
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('guest')}
-                    className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer ${
-                      activeTab === 'guest'
-                        ? 'bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/30'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    👤 Alias Local
-                  </button>
-                </div>
+                {authMode === 'recovery' ? (
+                  <form onSubmit={handleResetPasswordSubmit} className="space-y-3">
+                    <div className="flex items-center justify-between p-1 bg-[#0F172A] rounded-lg border border-slate-800 text-xs font-mono">
+                      <button
+                        type="button"
+                        onClick={() => { setAuthMode('signup'); setAuthError(null); setRecoverySuccessMsg(null); }}
+                        className="flex-1 py-1.5 rounded-md transition-all font-bold cursor-pointer text-slate-400 hover:text-slate-200"
+                      >
+                        Crear Cuenta
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setAuthMode('signin'); setAuthError(null); setRecoverySuccessMsg(null); }}
+                        className="flex-1 py-1.5 rounded-md transition-all font-bold cursor-pointer text-slate-400 hover:text-slate-200"
+                      >
+                        Iniciar Sesión
+                      </button>
+                    </div>
 
-                {activeTab === 'guest' ? (
-                  // GUEST LOCAL ALIAS
-                  <form onSubmit={handleSaveHudName} className="space-y-4">
-                    <div className="p-3.5 rounded-xl bg-[#0F172A] border border-[#00F0FF]/20 text-xs text-slate-300 leading-relaxed flex items-center gap-2">
-                      <CloudUpload className="w-4 h-4 text-[#00F0FF] shrink-0" />
-                      <span>Cambia tu nombre temporal sin registrarte. Los datos seguirán guardados localmente.</span>
+                    <div className="p-3 rounded-xl bg-[#0F172A] border border-[#00F0FF]/30 text-xs text-slate-300 leading-relaxed flex items-center gap-2">
+                      <Key className="w-4 h-4 text-[#00F0FF] shrink-0" />
+                      <span>Ingresa tu correo registrado para recibir el enlace de recuperación.</span>
+                    </div>
+
+                    {authError && (
+                      <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/60 text-rose-300 text-xs font-bold flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{authError}</span>
+                      </div>
+                    )}
+
+                    {recoverySuccessMsg && (
+                      <div className="p-3 rounded-xl bg-[#00FFCC]/20 border border-[#00FFCC] text-[#00FFCC] text-xs font-bold flex items-center gap-2 shadow-[0_0_15px_rgba(0,255,204,0.3)]">
+                        <CheckCircle2 className="w-4 h-4 shrink-0 animate-bounce" />
+                        <span>{recoverySuccessMsg}</span>
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        <Mail className="w-3 h-3 text-[#00F0FF]" /> Ingresa tu correo registrado
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="operador@jama.app"
+                        className="w-full px-3 py-2 bg-[#0A0D14] border border-[#00F0FF]/40 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-[#00F0FF]"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-[#00F0FF]/25 via-[#00FFCC]/30 to-[#00F0FF]/25 hover:from-[#00F0FF]/40 hover:to-[#00FFCC]/40 border-2 border-[#00F0FF] text-[#00F0FF] rounded-xl text-xs font-black uppercase tracking-wider shadow-[0_0_20px_rgba(0,240,255,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-[#00F0FF]" />
+                          ENVIANDO ENLACE...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4 fill-[#00F0FF]" />
+                          ENVIAR ENLACE DE RECUPERACIÓN
+                        </>
+                      )}
+                    </button>
+
+                    <div className="text-right pt-1">
+                      <button
+                        type="button"
+                        onClick={() => { setAuthMode('signin'); setAuthError(null); setRecoverySuccessMsg(null); }}
+                        className="text-[11px] text-slate-400 hover:text-[#00F0FF] transition-colors underline font-mono cursor-pointer"
+                      >
+                        [ Volver a Iniciar Sesión ]
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleAuthSubmit} className="space-y-3">
+                    <div className="flex items-center justify-between p-1 bg-[#0F172A] rounded-lg border border-slate-800 text-xs font-mono">
+                      <button
+                        type="button"
+                        onClick={() => { setAuthMode('signin'); setAuthError(null); setRecoverySuccessMsg(null); }}
+                        className={`flex-1 py-1.5 rounded-md transition-all font-bold cursor-pointer ${
+                          authMode === 'signin'
+                            ? 'bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Iniciar Sesión
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setAuthMode('signup'); setAuthError(null); setRecoverySuccessMsg(null); }}
+                        className={`flex-1 py-1.5 rounded-md transition-all font-bold cursor-pointer ${
+                          authMode === 'signup'
+                            ? 'bg-[#00FFCC]/20 text-[#00FFCC] border border-[#00FFCC]/40'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Crear Cuenta
+                      </button>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-[#0F172A] border border-slate-800 text-xs text-slate-300 leading-relaxed">
+                      {authMode === 'signup'
+                        ? 'Crea tu cuenta para asegurar tu rango, nivel e integrar tus datos en la nube Supabase.'
+                        : 'Ingresa tus credenciales para acceder a tu consola táctica en la nube.'}
+                    </div>
+
+                    {authError && (
+                      <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/60 text-rose-300 text-xs font-bold flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{authError}</span>
+                      </div>
+                    )}
+
+                    {recoverySuccessMsg && (
+                      <div className="p-3 rounded-xl bg-[#00FFCC]/20 border border-[#00FFCC] text-[#00FFCC] text-xs font-bold flex items-center gap-2 shadow-[0_0_15px_rgba(0,255,204,0.3)]">
+                        <CheckCircle2 className="w-4 h-4 shrink-0 animate-bounce" />
+                        <span>{recoverySuccessMsg}</span>
+                      </div>
+                    )}
+
+                    {isAuthSuccess && (
+                      <div className="p-3 rounded-xl bg-[#00FFCC]/20 border border-[#00FFCC] text-[#00FFCC] text-xs font-bold flex items-center gap-2 shadow-[0_0_15px_rgba(0,255,204,0.3)]">
+                        <CheckCircle2 className="w-4 h-4 shrink-0 animate-bounce" />
+                        ¡Operador autenticado y datos sincronizados!
+                      </div>
+                    )}
+
+                    {authMode === 'signup' && (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <User className="w-3 h-3 text-[#00FFCC]" /> Nombre o Alias Táctico
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={alias}
+                          onChange={(e) => setAlias(e.target.value)}
+                          placeholder="Ejemplo: J.A.M.A."
+                          className="w-full px-3 py-2 bg-[#0A0D14] border border-[#00FFCC]/40 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-[#00FFCC]"
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        <Mail className="w-3 h-3 text-[#00FFCC]" /> Correo Electrónico
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="operador@jama.app"
+                        className="w-full px-3 py-2 bg-[#0A0D14] border border-[#00FFCC]/40 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-[#00FFCC]"
+                      />
                     </div>
 
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5 text-[#00F0FF]" /> Identidad del HUD
+                        <Key className="w-3 h-3 text-[#00FFCC]" /> Contraseña
                       </label>
                       <input
-                        type="text"
+                        type="password"
                         required
-                        value={hudInput}
-                        onChange={(e) => setHudInput(e.target.value)}
-                        placeholder="Ejemplo: HUD INVITADO"
-                        className="w-full px-3 py-2 bg-[#0A0D14] border border-[#00F0FF]/40 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-[#00F0FF] uppercase"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-3 py-2 bg-[#0A0D14] border border-[#00FFCC]/40 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-[#00FFCC]"
                       />
+                      {authMode === 'signin' && (
+                        <div className="flex justify-end pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAuthMode('recovery');
+                              setAuthError(null);
+                              setRecoverySuccessMsg(null);
+                            }}
+                            className="text-[11px] text-[#00F0FF] hover:text-[#00FFCC] hover:underline font-mono cursor-pointer transition-colors"
+                          >
+                            ¿Olvidaste tu contraseña?
+                          </button>
+                        </div>
+                      )}
                     </div>
-
-                    {savedSuccess && (
-                      <div className="p-3 rounded-xl bg-[#00FFCC]/20 border border-[#00FFCC] text-[#00FFCC] text-xs font-bold flex items-center gap-2 animate-pulse">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        ¡Nombre temporal del HUD guardado!
-                      </div>
-                    )}
 
                     <button
                       type="submit"
-                      className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-[#00F0FF]/15 via-[#00F0FF]/25 to-[#00F0FF]/15 hover:from-[#00F0FF]/30 hover:to-[#00F0FF]/30 border border-[#00F0FF] text-[#00F0FF] rounded-xl text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(0,240,255,0.3)] transition-all cursor-pointer flex items-center justify-center gap-2"
+                      disabled={isLoading}
+                      className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-[#00F0FF]/25 via-[#00FFCC]/30 to-[#00F0FF]/25 hover:from-[#00F0FF]/40 hover:to-[#00FFCC]/40 border-2 border-[#00FFCC] text-[#00FFCC] rounded-xl text-xs font-black uppercase tracking-wider shadow-[0_0_20px_rgba(0,255,204,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      <HardDrive className="w-4 h-4" />
-                      GUARDAR ALIAS LOCAL
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-[#00FFCC]" />
+                          CONECTANDO CON SUPABASE...
+                        </>
+                      ) : authMode === 'signup' ? (
+                        <>
+                          <Zap className="w-4 h-4 fill-[#00FFCC]" />
+                          CREAR CUENTA & SINCRONIZAR
+                        </>
+                      ) : (
+                        <>
+                          <LogIn className="w-4 h-4 text-[#00FFCC]" />
+                          INICIAR SESIÓN TÁCTICA
+                        </>
+                      )}
                     </button>
                   </form>
-                ) : (
-                  // ACCOUNT AUTH MODES (Signup / Signin / Recovery)
-                  <div>
-                    {authMode === 'recovery' ? (
-                      <form onSubmit={handleResetPasswordSubmit} className="space-y-3">
-                        <div className="flex items-center justify-between p-1 bg-[#0F172A] rounded-lg border border-slate-800 text-xs font-mono">
-                          <button
-                            type="button"
-                            onClick={() => { setAuthMode('signup'); setAuthError(null); setRecoverySuccessMsg(null); }}
-                            className="flex-1 py-1.5 rounded-md transition-all font-bold cursor-pointer text-slate-400 hover:text-slate-200"
-                          >
-                            Crear Cuenta
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setAuthMode('signin'); setAuthError(null); setRecoverySuccessMsg(null); }}
-                            className="flex-1 py-1.5 rounded-md transition-all font-bold cursor-pointer text-slate-400 hover:text-slate-200"
-                          >
-                            Iniciar Sesión
-                          </button>
-                        </div>
-
-                        <div className="p-3 rounded-xl bg-[#0F172A] border border-[#00F0FF]/30 text-xs text-slate-300 leading-relaxed flex items-center gap-2">
-                          <Key className="w-4 h-4 text-[#00F0FF] shrink-0" />
-                          <span>Ingresa tu correo registrado para recibir el enlace de recuperación.</span>
-                        </div>
-
-                        {authError && (
-                          <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/60 text-rose-300 text-xs font-bold flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 shrink-0" />
-                            <span>{authError}</span>
-                          </div>
-                        )}
-
-                        {recoverySuccessMsg && (
-                          <div className="p-3 rounded-xl bg-[#00FFCC]/20 border border-[#00FFCC] text-[#00FFCC] text-xs font-bold flex items-center gap-2 shadow-[0_0_15px_rgba(0,255,204,0.3)]">
-                            <CheckCircle2 className="w-4 h-4 shrink-0 animate-bounce" />
-                            <span>{recoverySuccessMsg}</span>
-                          </div>
-                        )}
-
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                            <Mail className="w-3 h-3 text-[#00F0FF]" /> Ingresa tu correo registrado
-                          </label>
-                          <input
-                            type="email"
-                            required
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="operador@jama.app"
-                            className="w-full px-3 py-2 bg-[#0A0D14] border border-[#00F0FF]/40 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-[#00F0FF]"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={isLoading}
-                          className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-[#00F0FF]/25 via-[#00FFCC]/30 to-[#00F0FF]/25 hover:from-[#00F0FF]/40 hover:to-[#00FFCC]/40 border-2 border-[#00F0FF] text-[#00F0FF] rounded-xl text-xs font-black uppercase tracking-wider shadow-[0_0_20px_rgba(0,240,255,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
-                        >
-                          {isLoading ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin text-[#00F0FF]" />
-                              ENVIANDO ENLACE...
-                            </>
-                          ) : (
-                            <>
-                              <Zap className="w-4 h-4 fill-[#00F0FF]" />
-                              ⚡ ENVIAR ENLACE DE RECUPERACIÓN
-                            </>
-                          )}
-                        </button>
-
-                        <div className="text-right pt-1">
-                          <button
-                            type="button"
-                            onClick={() => { setAuthMode('signin'); setAuthError(null); setRecoverySuccessMsg(null); }}
-                            className="text-[11px] text-slate-400 hover:text-[#00F0FF] transition-colors underline font-mono cursor-pointer"
-                          >
-                            [ Volver a Iniciar Sesión ]
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <form onSubmit={handleAuthSubmit} className="space-y-3">
-                        <div className="flex items-center justify-between p-1 bg-[#0F172A] rounded-lg border border-slate-800 text-xs font-mono">
-                          <button
-                            type="button"
-                            onClick={() => { setAuthMode('signup'); setAuthError(null); setRecoverySuccessMsg(null); }}
-                            className={`flex-1 py-1.5 rounded-md transition-all font-bold cursor-pointer ${
-                              authMode === 'signup'
-                                ? 'bg-[#00FFCC]/20 text-[#00FFCC] border border-[#00FFCC]/40'
-                                : 'text-slate-400 hover:text-slate-200'
-                            }`}
-                          >
-                            Crear Cuenta
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setAuthMode('signin'); setAuthError(null); setRecoverySuccessMsg(null); }}
-                            className={`flex-1 py-1.5 rounded-md transition-all font-bold cursor-pointer ${
-                              authMode === 'signin'
-                                ? 'bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40'
-                                : 'text-slate-400 hover:text-slate-200'
-                            }`}
-                          >
-                            Iniciar Sesión
-                          </button>
-                        </div>
-
-                        <div className="p-3 rounded-xl bg-[#0F172A] border border-slate-800 text-xs text-slate-300 leading-relaxed">
-                          {authMode === 'signup'
-                            ? 'Crea tu cuenta para asegurar tu rango, nivel e integrar tus datos en la nube Supabase.'
-                            : 'Ingresa tus credenciales para acceder a tu consola táctica en la nube.'}
-                        </div>
-
-                        {authError && (
-                          <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/60 text-rose-300 text-xs font-bold flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 shrink-0" />
-                            <span>{authError}</span>
-                          </div>
-                        )}
-
-                        {isAuthSuccess && (
-                          <div className="p-3 rounded-xl bg-[#00FFCC]/20 border border-[#00FFCC] text-[#00FFCC] text-xs font-bold flex items-center gap-2 shadow-[0_0_15px_rgba(0,255,204,0.3)]">
-                            <CheckCircle2 className="w-4 h-4 shrink-0 animate-bounce" />
-                            ¡Operador autenticado y datos sincronizados!
-                          </div>
-                        )}
-
-                        {authMode === 'signup' && (
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                              <User className="w-3 h-3 text-[#00FFCC]" /> Nombre o Alias Táctico
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={alias}
-                              onChange={(e) => setAlias(e.target.value)}
-                              placeholder="Ejemplo: J.A.M.A."
-                              className="w-full px-3 py-2 bg-[#0A0D14] border border-[#00FFCC]/40 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-[#00FFCC]"
-                            />
-                          </div>
-                        )}
-
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                            <Mail className="w-3 h-3 text-[#00FFCC]" /> Correo Electrónico
-                          </label>
-                          <input
-                            type="email"
-                            required
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="operador@jama.app"
-                            className="w-full px-3 py-2 bg-[#0A0D14] border border-[#00FFCC]/40 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-[#00FFCC]"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                            <Key className="w-3 h-3 text-[#00FFCC]" /> Contraseña
-                          </label>
-                          <input
-                            type="password"
-                            required
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="••••••••"
-                            className="w-full px-3 py-2 bg-[#0A0D14] border border-[#00FFCC]/40 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-[#00FFCC]"
-                          />
-                          {authMode === 'signin' && (
-                            <div className="flex justify-end pt-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setAuthMode('recovery');
-                                  setAuthError(null);
-                                  setRecoverySuccessMsg(null);
-                                }}
-                                className="text-[11px] text-[#00F0FF] hover:text-[#00FFCC] hover:underline font-mono cursor-pointer transition-colors"
-                              >
-                                ¿Olvidaste tu contraseña?
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={isLoading}
-                          className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-[#00F0FF]/25 via-[#00FFCC]/30 to-[#00F0FF]/25 hover:from-[#00F0FF]/40 hover:to-[#00FFCC]/40 border-2 border-[#00FFCC] text-[#00FFCC] rounded-xl text-xs font-black uppercase tracking-wider shadow-[0_0_20px_rgba(0,255,204,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
-                        >
-                          {isLoading ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin text-[#00FFCC]" />
-                              CONECTANDO CON SUPABASE...
-                            </>
-                          ) : authMode === 'signup' ? (
-                            <>
-                              <Zap className="w-4 h-4 fill-[#00FFCC]" />
-                              ⚡ CREAR CUENTA & SINCRONIZAR
-                            </>
-                          ) : (
-                            <>
-                              <LogIn className="w-4 h-4 text-[#00FFCC]" />
-                              ⚡ INICIAR SESIÓN TÁCTICA
-                            </>
-                          )}
-                        </button>
-                      </form>
-                    )}
-                  </div>
                 )}
               </div>
             )}

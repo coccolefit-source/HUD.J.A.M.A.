@@ -443,7 +443,7 @@ export const ReviewInsights: React.FC<ReviewInsightsProps> = ({
 
                 {/* Impact & Benefits Box */}
                 <div className="p-3 rounded-xl bg-[#06B6D4]/10 border border-[#06B6D4]/30 text-xs font-mono">
-                  <span className="font-bold text-[#06B6D4] block mb-1">🚀 Victoria de Impulso:</span>
+                  <span className="font-bold text-[#06B6D4] block mb-1">Victoria de Impulso:</span>
                   <p className="text-slate-200 text-[11px] leading-relaxed">
                     {getNeuroBenefits(periodData.revelationHabit).gained}
                   </p>
@@ -487,7 +487,7 @@ export const ReviewInsights: React.FC<ReviewInsightsProps> = ({
               const selectedFocusHabit = activeHabits.find(h => h.id === focusHabitId) || periodData.lowestHabit;
               return (
                 <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 text-xs font-mono">
-                  <span className="font-bold text-blue-400 block mb-1">🔥 Beneficio de Reactivación:</span>
+                  <span className="font-bold text-blue-400 block mb-1">Beneficio de Reactivación:</span>
                   <p className="text-slate-200 text-[11px] leading-relaxed">
                     {getNeuroBenefits(selectedFocusHabit).motivational}
                   </p>

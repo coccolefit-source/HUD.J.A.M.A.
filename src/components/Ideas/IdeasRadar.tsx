@@ -35,8 +35,8 @@ const INFO_TEMPLATES = [
     tooltip: 'Agregar lista estructurada de siguientes pasos'
   },
   {
-    label: '🛠️ Recursos Requeridos',
-    content: '\n\n### 🛠️ Recursos y Herramientas:\n- Herramientas:\n- Tiempo estimado:\n- Colaboradores:',
+    label: 'Recursos Requeridos',
+    content: '\n\n### Recursos y Herramientas:\n- Herramientas:\n- Tiempo estimado:\n- Colaboradores:',
     tooltip: 'Agregar sección de recursos necesarios'
   },
   {
@@ -234,7 +234,7 @@ export const IdeasRadar: React.FC<IdeasRadarProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFormNotes(prev => prev + '\n\n### 🛠️ Recursos:\n- ')}
+                  onClick={() => setFormNotes(prev => prev + '\n\n### Recursos:\n- ')}
                   className="text-[10px] font-mono text-[#F59E0B] hover:underline"
                 >
                   + Recursos
@@ -535,6 +535,7 @@ export const IdeasRadar: React.FC<IdeasRadarProps> = ({
                         CANCELAR
                       </button>
                       <button
+                        type="button"
                         onClick={handleSaveEdit}
                         disabled={!editTitle.trim()}
                         className="px-5 py-2 rounded-lg bg-[#F59E0B]/20 hover:bg-[#F59E0B]/30 text-[#F59E0B] border border-[#F59E0B]/40 text-xs font-mono font-bold transition-all flex items-center gap-1.5 disabled:opacity-40"

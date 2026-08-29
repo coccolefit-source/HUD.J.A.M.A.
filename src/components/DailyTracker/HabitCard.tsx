@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { motion } from 'motion/react';
 import { Check, Flame, MoreVertical, Edit3, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -44,7 +44,7 @@ function playDopamineChime() {
   }
 }
 
-export const HabitCard: React.FC<HabitCardProps> = ({
+export const HabitCard = React.memo(({
   habit,
   isCompleted,
   streakCount,
@@ -55,7 +55,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
   onMoveDown,
   canMoveUp = false,
   canMoveDown = false
-}) => {
+}: HabitCardProps) => {
   const [showMenu, setShowMenu] = React.useState(false);
 
   const handleToggleClick = (e: React.MouseEvent) => {
@@ -297,5 +297,5 @@ export const HabitCard: React.FC<HabitCardProps> = ({
       </div>
     </motion.div>
   );
-};
+});
 

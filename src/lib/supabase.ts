@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { Habit, DailyLog, Project, Idea } from '../types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://hgjfjvbnaysjjgeucrxq.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhnamZqdmJuYXlzampnZXVjcnhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3MDIxMDcsImV4cCI6MjEwMTI3ODEwN30.a0WegQYXpIPGHmhm3NFpMzLRp2WoWfnSOg6ezs2iI-M';
+const supabaseUrl = 'https://hgjfjvbnaysjjgeucrxq.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhnamZqdmJuYXlzampnZXVjcnhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3MDIxMDcsImV4cCI6MjEwMTI3ODEwN30.a0WegQYXpIPGHmhm3NFpMzLRp2WoWfnSOg6ezs2iI-M';
 
 export { supabaseUrl, supabaseAnonKey };
 

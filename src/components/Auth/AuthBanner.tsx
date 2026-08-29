@@ -48,7 +48,7 @@ export const AuthBanner: React.FC<AuthBannerProps> = ({
               onClick={onOpenAuthModal}
               className="px-3 py-1.5 bg-gradient-to-r from-[#00F0FF]/20 to-[#00FFCC]/20 hover:from-[#00F0FF]/30 hover:to-[#00FFCC]/30 border border-[#00FFCC]/60 text-[#00FFCC] rounded-xl text-[11px] font-extrabold tracking-wider uppercase flex items-center gap-1 shadow-[0_0_10px_rgba(0,255,204,0.2)] transition-all cursor-pointer whitespace-nowrap"
             >
-              <span>☁️ 🔒 CREAR CUENTA // ASEGURA TU PROGRESO &gt;</span>
+              <span>CREAR CUENTA // ASEGURA TU PROGRESO &gt;</span>
             </button>
 
             <button

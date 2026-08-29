@@ -168,7 +168,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
               ) : (
                 <>
                   <ShieldCheck className="w-4 h-4 text-[#00F0FF]" />
-                  ⚡ GUARDAR NUEVA CONTRASEÑA
+                  GUARDAR NUEVA CONTRASEÑA
                 </>
               )}
             </button>

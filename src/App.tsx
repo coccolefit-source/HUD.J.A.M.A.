@@ -100,15 +100,26 @@ function App() {
   }, []);
 
   const calculateStreak = useCallback((habitId: string, uptoDate: string): number => {
+    const todayStr = getTodayISO();
+    
+    if (uptoDate === todayStr) {
+      const currentHabits = habitsRef.current;
+      if (currentHabits) {
+        const habit = currentHabits.find(h => String(h.id) === String(habitId));
+        if (habit && habit.streak !== undefined) {
+          return habit.streak;
+        }
+      }
+    }
+
     let streak = 0;
     let currentDate = parseISODate(uptoDate);
     
     // Si la fecha seleccionada es hoy y el hábito no está completado hoy,
     // calculamos la racha empezando desde ayer para que la racha no se muestre como 0
     // antes de que el usuario marque el hábito hoy.
-    const todayStr = getTodayISO();
     if (uptoDate === todayStr) {
-      const logToday = logs[todayStr];
+      const logToday = logsRef.current[todayStr];
       const completedToday = logToday?.completedHabitIds?.includes(habitId);
       if (!completedToday) {
         currentDate.setDate(currentDate.getDate() - 1);
@@ -117,7 +128,7 @@ function App() {
 
     while (true) {
       const dateStr = formatDateToISO(currentDate);
-      const log = logs[dateStr];
+      const log = logsRef.current[dateStr];
       const isCompleted = log?.completedHabitIds?.includes(habitId);
       if (isCompleted) {
         streak++;
@@ -127,7 +138,7 @@ function App() {
       }
     }
     return streak;
-  }, [logs]);
+  }, []);
 
   const activeStreak = useMemo(() => {
     let streak = 0;
@@ -163,10 +174,20 @@ function App() {
   }, [habits]);
 
   const handleResetData = () => {
-    if (confirm("⚠️ ¿Estás seguro de que deseas restablecer todos los datos del sistema? Esta acción es irreversible.")) {
+    if (confirm("¿Estás seguro de que deseas restablecer todos los datos del sistema? Esta acción es irreversible.")) {
       resetToSampleData();
     }
   };
+
+  const habitsRef = useRef(habits);
+  useEffect(() => {
+    habitsRef.current = habits;
+  }, [habits]);
+
+  const logsRef = useRef(logs);
+  useEffect(() => {
+    logsRef.current = logs;
+  }, [logs]);
 
   const projectsRef = useRef(projects);
   useEffect(() => {
@@ -308,21 +329,21 @@ function App() {
         const res = await createCloudIdea(newIdea);
         if (res.error) {
           console.error("Error al insertar idea en Supabase:", res.error);
-          showToast("⚠️ Guardada localmente. Error en nube.");
+          showToast("Guardada localmente. Error en nube.");
         } else if (res.data) {
           setIdeas(prev => {
             const updated = prev.map(i => i.id === newIdea.id ? { ...i, ...res.data } : i);
             saveGuestIdeas(updated);
             return updated;
           });
-          showToast("✅ Idea guardada con éxito en la nube.");
+          showToast("Idea guardada con éxito en la nube.");
         }
       } else {
-        showToast("✅ Idea guardada localmente.");
+        showToast("Idea guardada localmente.");
       }
     } catch (err: any) {
       console.error("Error al guardar idea:", err);
-      showToast("🔴 Error: " + (err.message || err));
+      showToast("Error: " + (err.message || err));
     }
   };
 
@@ -341,23 +362,23 @@ function App() {
         const res = await updateCloudIdea(ideaId, updates);
         if (res.error) {
           console.error("Error al actualizar idea en Supabase:", res.error);
-          showToast("⚠️ Guardada localmente. Error al sincronizar en nube.");
+          showToast("Guardada localmente. Error al sincronizar en nube.");
         } else if (res.data) {
           setIdeas(prev => {
             const updated = prev.map(i => i.id === ideaId ? { ...i, ...res.data } : i);
             saveGuestIdeas(updated);
             return updated;
           });
-          showToast("✅ Idea actualizada con éxito.");
+          showToast("Idea actualizada con éxito.");
         } else {
-          showToast("✅ Idea actualizada.");
+          showToast("Idea actualizada.");
         }
       } else {
-        showToast("✅ Idea actualizada localmente.");
+        showToast("Idea actualizada localmente.");
       }
     } catch (err: any) {
       console.error("Error al actualizar idea:", err);
-      showToast("🔴 Error al sincronizar: " + (err.message || err));
+      showToast("Error al sincronizar: " + (err.message || err));
     }
   };
 
@@ -375,14 +396,14 @@ function App() {
         if (res.error) {
           console.error("Error al eliminar idea en nube:", res.error);
         } else {
-          showToast("✅ Idea eliminada.");
+          showToast("Idea eliminada.");
         }
       } else {
-        showToast("✅ Idea eliminada localmente.");
+        showToast("Idea eliminada localmente.");
       }
     } catch (e: any) {
       console.error("Error al eliminar idea:", e);
-      showToast("🔴 Error: " + (e.message || e));
+      showToast("Error: " + (e.message || e));
     }
   };
 
@@ -509,21 +530,17 @@ function App() {
     }
   };
 
-  const handleToggleHabit = async (arg1: string, arg2?: string) => {
+  const handleToggleHabit = useCallback((arg1: string, arg2?: string) => {
     const habitId = arg2 ? arg2 : arg1;
     const dateStr = arg2 ? arg1 : getTodayISO();
     const isToday = dateStr === getTodayISO();
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        showToast("⚠️ ATENCIÓN: No hay sesión activa.");
-        setIsAuthenticated(false);
-        return;
-      }
-
-      const targetHabit = habits.find(h => String(h.id) === String(habitId));
-      const activeLog = logs[dateStr] || {
+      const currentHabits = habitsRef.current;
+      const currentLogs = logsRef.current;
+      
+      const targetHabit = currentHabits.find(h => String(h.id) === String(habitId));
+      const activeLog = currentLogs[dateStr] || {
         date: dateStr,
         completedHabitIds: [],
         isClosed: false
@@ -537,14 +554,17 @@ function App() {
         ? Array.from(new Set([...currentCompletedIds, habitId]))
         : currentCompletedIds.filter(id => id !== habitId);
 
-      const activeHabits = habits.filter(h => !h.archived);
+      const activeHabits = currentHabits.filter(h => !h.archived);
       const totalHabits = activeHabits.length;
       const validCompleted = activeHabits.filter(h => updatedCompletedIds.includes(h.id)).length;
       const rate = totalHabits > 0 ? Math.min(100, Math.round((validCompleted / totalHabits) * 100)) : 0;
 
       // Actualizar información y racha de hábito si la fecha es hoy
+      let newStreak = targetHabit?.streak || 0;
+      let newLastCompletedAt = targetHabit?.lastCompletedAt || null;
+      
       if (isToday) {
-        let newStreak = 0;
+        newStreak = 0;
         let checkDate = parseISODate(dateStr);
         if (!newCompletedState) {
           checkDate.setDate(checkDate.getDate() - 1);
@@ -559,7 +579,7 @@ function App() {
               break;
             }
           } else {
-            const checkLog = logs[checkDateStr];
+            const checkLog = currentLogs[checkDateStr];
             const isCompletedInCheckLog = checkLog?.completedHabitIds?.includes(habitId);
             if (isCompletedInCheckLog) {
               newStreak++;
@@ -570,49 +590,73 @@ function App() {
           }
         }
 
-        const newLastCompletedAt = newCompletedState ? new Date().toISOString() : null;
+        newLastCompletedAt = newCompletedState ? new Date().toISOString() : null;
 
-        setHabits(prev => prev.map(h => String(h.id) === String(habitId) ? {
-          ...h,
-          completed: newCompletedState,
-          streak: newStreak,
-          lastCompletedAt: newLastCompletedAt
-        } : h));
-
-        // Petición en segundo plano para actualizar racha en Supabase
-        supabase
-          .from('habits')
-          .update({ 
+        // Actualización optimista del estado local
+        setHabits(prev => {
+          const updated = prev.map(h => String(h.id) === String(habitId) ? {
+            ...h,
             completed: newCompletedState,
             streak: newStreak,
-            last_completed_at: newLastCompletedAt
-          })
-          .eq('id', habitId)
-          .eq('user_id', user.id)
-          .then(({ error }) => {
-            if (error) {
-              console.error('Error al actualizar hábito (background):', error);
-            }
-          });
+            lastCompletedAt: newLastCompletedAt
+          } : h);
+          saveGuestHabits(updated);
+          return updated;
+        });
       }
 
       if (newCompletedState) {
         addXP(10);
       }
+      
+      const newLog = {
+        ...activeLog,
+        completedHabitIds: updatedCompletedIds,
+        closureRate: rate
+      };
+      
+      const updatedLogs = {
+        ...currentLogs,
+        [dateStr]: newLog
+      };
 
-      updateLogs({
-        ...logs,
-        [dateStr]: {
-          ...activeLog,
-          completedHabitIds: updatedCompletedIds,
-          closureRate: rate
+      // Actualización optimista de logs
+      setLogs(updatedLogs);
+      saveGuestDailyLogs(updatedLogs);
+
+      // Petición asíncrona a Supabase en segundo plano
+      const syncWithCloud = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return; // Si no hay usuario, queda guardado en local
+        
+        // Sincronizar log diario
+        await upsertCloudDailyLog(newLog);
+
+        // Sincronizar hábito
+        if (isToday) {
+          const { error: habitError } = await supabase
+            .from('habits')
+            .update({ 
+              completed: newCompletedState,
+              streak: newStreak,
+              last_completed_at: newLastCompletedAt
+            })
+            .eq('id', habitId)
+            .eq('user_id', user.id);
+            
+          if (habitError) {
+            console.error('Error al actualizar hábito (background):', habitError);
+          }
         }
-      }, dateStr);
+      };
+      
+      syncWithCloud();
+
     } catch (err: any) {
       console.error("Error al conmutar estado del hábito:", err);
-      showToast("🔴 Error al actualizar el hábito.");
+      showToast("Error local al actualizar el hábito.");
     }
-  };
+  }, []);
 
   const handleMoveHabit = useCallback((habitId: string, direction: 'up' | 'down') => {
     setHabits(prev => {
@@ -638,7 +682,7 @@ function App() {
     });
   }, []);
 
-  const handleSaveHabit = async (habitData: Partial<Habit>) => {
+  const handleSaveHabit = useCallback(async (habitData: Partial<Habit>) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -710,10 +754,10 @@ function App() {
     } catch (err: any) {
       console.error('Error al guardar hábito:', err);
     }
-  };
+  }, []);
 
 
-  const handleDeleteHabit = async (habitId: string) => {
+  const handleDeleteHabit = useCallback(async (habitId: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -727,7 +771,7 @@ function App() {
     } catch (e: any) {
       console.error("Error al eliminar hábito:", e);
     }
-  };
+  }, []);
 
   const handleCloseDay = (dateStr: string) => {
     const activeLog = logs[dateStr] || { date: dateStr, completedHabitIds: [], isClosed: false };
@@ -887,9 +931,11 @@ function App() {
       
       if (ideasRes.data) {
          setIdeas(ideasRes.data.map((r: any) => ({
-            id: String(r.id), title: r.title, description: r.description,
-            category: r.category, impact: r.impact, effort: r.effort,
-            status: r.status, createdAt: r.created_at
+            id: String(r.id), 
+            title: r.title, 
+            notes: r.notes || undefined,
+            category: r.category, 
+            createdAt: r.created_at || new Date().toISOString()
          })));
       }
       

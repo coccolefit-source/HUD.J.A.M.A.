@@ -81,12 +81,12 @@ export async function createCloudHabit(payload: HabitCloudPayload): Promise<{ su
         let shouldRetry = false;
         
         if (error.message.includes('days_of_week')) {
-          console.warn('⚠️ COLUMNA FALTANTE: La base de datos no tiene la columna "days_of_week". Por favor, ejecuta este SQL en Supabase:\n\nALTER TABLE habits ADD COLUMN days_of_week text[] DEFAULT \'{}\';\nNOTIFY pgrst, reload_schema;\n\nReintentando guardado sin días de la semana...');
+          console.warn('COLUMNA FALTANTE: La base de datos no tiene la columna "days_of_week". Por favor, ejecuta este SQL en Supabase:\n\nALTER TABLE habits ADD COLUMN days_of_week text[] DEFAULT \'{}\';\nNOTIFY pgrst, reload_schema;\n\nReintentando guardado sin días de la semana...');
           delete (fallbackPayload as any).days_of_week;
           shouldRetry = true;
         }
         if (error.message.includes('target_days')) {
-          console.warn('⚠️ COLUMNA FALTANTE "target_days", reintentando sin ella...');
+          console.warn('COLUMNA FALTANTE "target_days", reintentando sin ella...');
           delete (fallbackPayload as any).target_days;
           shouldRetry = true;
         }
@@ -174,7 +174,7 @@ export async function updateCloudHabit(
 
     if (error) {
       if (error.code === 'PGRST204' && error.message.includes('days_of_week')) {
-        console.warn('⚠️ COLUMNA FALTANTE: La base de datos no tiene la columna "days_of_week". Por favor, ejecuta este SQL en Supabase:\n\nALTER TABLE habits ADD COLUMN days_of_week text[] DEFAULT \'{}\';\nNOTIFY pgrst, reload_schema;\n\nReintentando actualización sin días de la semana...');
+        console.warn('COLUMNA FALTANTE: La base de datos no tiene la columna "days_of_week". Por favor, ejecuta este SQL en Supabase:\n\nALTER TABLE habits ADD COLUMN days_of_week text[] DEFAULT \'{}\';\nNOTIFY pgrst, reload_schema;\n\nReintentando actualización sin días de la semana...');
         
         const fallbackPayload = { ...updatePayload };
         delete (fallbackPayload as any).days_of_week;
