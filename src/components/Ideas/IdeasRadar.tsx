@@ -104,20 +104,24 @@ export const IdeasRadar: React.FC<IdeasRadarProps> = ({
     if (!selectedIdea || !editTitle.trim()) return;
 
     try {
+      const updatedTitle = editTitle.trim();
+      const updatedCategory = editCategory;
+      const updatedNotes = editNotes;
+
       if (onUpdateIdea) {
         await onUpdateIdea(selectedIdea.id, {
-          title: editTitle.trim(),
-          category: editCategory,
-          notes: editNotes.trim() || undefined
+          title: updatedTitle,
+          category: updatedCategory,
+          notes: updatedNotes
         });
       }
       
       // Update local state in modal preview
       setSelectedIdea(prev => prev ? {
         ...prev,
-        title: editTitle.trim(),
-        category: editCategory,
-        notes: editNotes.trim() || undefined
+        title: updatedTitle,
+        category: updatedCategory,
+        notes: updatedNotes
       } : null);
       
       setIsEditing(false);

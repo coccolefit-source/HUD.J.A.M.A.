@@ -290,19 +290,35 @@ function App() {
 
   const handleSaveIdea = async (idea: Idea) => {
     try {
+      const newIdea = {
+        ...idea,
+        id: idea.id || String(Date.now()),
+        createdAt: idea.createdAt || new Date().toISOString()
+      };
+      
+      // Actualizar estado local e inmediatamente guardar en storage local
+      setIdeas(prev => {
+        const updated = [newIdea, ...prev];
+        saveGuestIdeas(updated);
+        return updated;
+      });
+
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        showToast("⚠️ ATENCIÓN: No hay sesión activa.");
-        setIsAuthenticated(false);
-        return;
-      }
-      const res = await createCloudIdea(idea);
-      if (res.error) {
-        console.error("Error al insertar idea en Supabase:", res.error);
-        showToast("🔴 Error al guardar idea en Supabase.");
-      } else if (res.data) {
-        setIdeas(prev => [res.data, ...prev]);
-        showToast("✅ Idea guardada con éxito.");
+      if (user) {
+        const res = await createCloudIdea(newIdea);
+        if (res.error) {
+          console.error("Error al insertar idea en Supabase:", res.error);
+          showToast("⚠️ Guardada localmente. Error en nube.");
+        } else if (res.data) {
+          setIdeas(prev => {
+            const updated = prev.map(i => i.id === newIdea.id ? { ...i, ...res.data } : i);
+            saveGuestIdeas(updated);
+            return updated;
+          });
+          showToast("✅ Idea guardada con éxito en la nube.");
+        }
+      } else {
+        showToast("✅ Idea guardada localmente.");
       }
     } catch (err: any) {
       console.error("Error al guardar idea:", err);
@@ -312,44 +328,57 @@ function App() {
 
   const handleUpdateIdea = async (ideaId: string, updates: Partial<Idea>) => {
     try {
+      // 1. Actualización inmediata del estado React y almacenamiento local
+      setIdeas(prev => {
+        const updated = prev.map(i => i.id === ideaId ? { ...i, ...updates } : i);
+        saveGuestIdeas(updated);
+        return updated;
+      });
+
+      // 2. Intentar guardar en Supabase si hay usuario autenticado
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        showToast("⚠️ ATENCIÓN: No hay sesión activa.");
-        setIsAuthenticated(false);
-        return;
-      }
-      const res = await updateCloudIdea(ideaId, updates);
-      if (res.error) {
-        console.error("Error al actualizar idea en Supabase:", res.error);
-        showToast("🔴 Error al actualizar la idea.");
-      } else if (res.data) {
-        setIdeas(prev => prev.map(i => i.id === ideaId ? { ...i, ...res.data } : i));
-        showToast("✅ Idea actualizada con éxito.");
+      if (user) {
+        const res = await updateCloudIdea(ideaId, updates);
+        if (res.error) {
+          console.error("Error al actualizar idea en Supabase:", res.error);
+          showToast("⚠️ Guardada localmente. Error al sincronizar en nube.");
+        } else if (res.data) {
+          setIdeas(prev => {
+            const updated = prev.map(i => i.id === ideaId ? { ...i, ...res.data } : i);
+            saveGuestIdeas(updated);
+            return updated;
+          });
+          showToast("✅ Idea actualizada con éxito.");
+        } else {
+          showToast("✅ Idea actualizada.");
+        }
       } else {
-        setIdeas(prev => prev.map(i => i.id === ideaId ? { ...i, ...updates } : i));
-        showToast("✅ Idea actualizada.");
+        showToast("✅ Idea actualizada localmente.");
       }
     } catch (err: any) {
       console.error("Error al actualizar idea:", err);
-      showToast("🔴 Error: " + (err.message || err));
+      showToast("🔴 Error al sincronizar: " + (err.message || err));
     }
   };
 
   const handleDeleteIdea = async (ideaId: string) => {
     try {
+      setIdeas(prev => {
+        const updated = prev.filter(i => i.id !== ideaId);
+        saveGuestIdeas(updated);
+        return updated;
+      });
+
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        showToast("⚠️ ATENCIÓN: No hay sesión activa.");
-        setIsAuthenticated(false);
-        return;
-      }
-      const res = await deleteCloudIdea(ideaId);
-      if (res.error) {
-        console.error("Error al eliminar idea:", res.error);
-        showToast("🔴 Error al eliminar idea.");
+      if (user) {
+        const res = await deleteCloudIdea(ideaId);
+        if (res.error) {
+          console.error("Error al eliminar idea en nube:", res.error);
+        } else {
+          showToast("✅ Idea eliminada.");
+        }
       } else {
-        setIdeas(prev => prev.filter(i => i.id !== ideaId));
-        showToast("✅ Idea eliminada.");
+        showToast("✅ Idea eliminada localmente.");
       }
     } catch (e: any) {
       console.error("Error al eliminar idea:", e);
