@@ -165,29 +165,35 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     if (!targetTask) return;
 
     const newCompleted = !targetTask.completed;
-    const updatedTasks = project.tasks.map(t => 
-      t.id === taskId ? { ...t, completed: newCompleted } : t
-    );
 
-    // Calculate new progress percentage for project
-    const completedCount = updatedTasks.filter(t => t.completed).length;
-    const newProgress = updatedTasks.length > 0 
-      ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
-      : project.progress;
-
-    const updatedProject: Project = {
-      ...project,
-      tasks: updatedTasks,
-      progress: newProgress,
-      updatedAt: new Date().toISOString()
-    };
-
-    onSaveProject(updatedProject);
-    await updateCloudTask(taskId, { 
+    const res = await updateCloudTask(taskId, { 
       completed: newCompleted,
       status: newCompleted ? 'completed' : 'pending',
       isExec: true
     });
+
+    if (res.success) {
+      const updatedTasks = project.tasks.map(t => 
+        t.id === taskId ? { ...t, completed: newCompleted } : t
+      );
+      const completedCount = updatedTasks.filter(t => t.completed).length;
+      const newProgress = updatedTasks.length > 0 
+        ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
+        : project.progress;
+
+      const updatedProject: Project = {
+        ...project,
+        tasks: updatedTasks,
+        progress: newProgress,
+        updatedAt: new Date().toISOString()
+      };
+
+      onSaveProject(updatedProject);
+    } else {
+      const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar tarea en Supabase');
+      console.error('Error en Supabase:', res.error);
+      alert(`Error en Supabase: ${errorMsg}`);
+    }
   };
 
   // Handle update task due date directly
@@ -196,22 +202,30 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     if (!project) return;
 
     const isToday = newDueDate === todayISO;
-    const updatedTasks = project.tasks.map(t => 
-      t.id === taskId ? { ...t, dueDate: newDueDate || undefined, isMyDay: isToday || t.isMyDay } : t
-    );
 
-    const updatedProject: Project = {
-      ...project,
-      tasks: updatedTasks,
-      updatedAt: new Date().toISOString()
-    };
-
-    onSaveProject(updatedProject);
-    await updateCloudTask(taskId, { 
+    const res = await updateCloudTask(taskId, { 
       dueDate: newDueDate,
       isMyDay: isToday,
       isExec: true
     });
+
+    if (res.success) {
+      const updatedTasks = project.tasks.map(t => 
+        t.id === taskId ? { ...t, dueDate: newDueDate || undefined, isMyDay: isToday || t.isMyDay } : t
+      );
+
+      const updatedProject: Project = {
+        ...project,
+        tasks: updatedTasks,
+        updatedAt: new Date().toISOString()
+      };
+
+      onSaveProject(updatedProject);
+    } else {
+      const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar fecha en Supabase');
+      console.error('Error en Supabase:', res.error);
+      alert(`Error en Supabase: ${errorMsg}`);
+    }
   };
 
   // Handle toggle Mi Día
@@ -225,22 +239,29 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     const newIsMyDay = !(targetTask.isMyDay || targetTask.dueDate === todayISO);
     const newDueDate = newIsMyDay ? todayISO : targetTask.dueDate;
 
-    const updatedTasks = project.tasks.map(t => 
-      t.id === taskId ? { ...t, isMyDay: newIsMyDay, dueDate: newDueDate } : t
-    );
-
-    const updatedProject: Project = {
-      ...project,
-      tasks: updatedTasks,
-      updatedAt: new Date().toISOString()
-    };
-
-    onSaveProject(updatedProject);
-    await updateCloudTask(taskId, { 
+    const res = await updateCloudTask(taskId, { 
       isMyDay: newIsMyDay,
       dueDate: newDueDate,
       isExec: true
     });
+
+    if (res.success) {
+      const updatedTasks = project.tasks.map(t => 
+        t.id === taskId ? { ...t, isMyDay: newIsMyDay, dueDate: newDueDate } : t
+      );
+
+      const updatedProject: Project = {
+        ...project,
+        tasks: updatedTasks,
+        updatedAt: new Date().toISOString()
+      };
+
+      onSaveProject(updatedProject);
+    } else {
+      const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar Mi Día en Supabase');
+      console.error('Error en Supabase:', res.error);
+      alert(`Error en Supabase: ${errorMsg}`);
+    }
   };
 
   // Handle delete task
@@ -248,21 +269,28 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     const project = (projects || []).find(p => p.id === projectId);
     if (!project) return;
 
-    const updatedTasks = project.tasks.filter(t => t.id !== taskId);
-    const completedCount = updatedTasks.filter(t => t.completed).length;
-    const newProgress = updatedTasks.length > 0 
-      ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
-      : 0;
+    const res = await deleteCloudTask(taskId);
 
-    const updatedProject: Project = {
-      ...project,
-      tasks: updatedTasks,
-      progress: newProgress,
-      updatedAt: new Date().toISOString()
-    };
+    if (res.success) {
+      const updatedTasks = project.tasks.filter(t => t.id !== taskId);
+      const completedCount = updatedTasks.filter(t => t.completed).length;
+      const newProgress = updatedTasks.length > 0 
+        ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
+        : 0;
 
-    onSaveProject(updatedProject);
-    await deleteCloudTask(taskId);
+      const updatedProject: Project = {
+        ...project,
+        tasks: updatedTasks,
+        progress: newProgress,
+        updatedAt: new Date().toISOString()
+      };
+
+      onSaveProject(updatedProject);
+    } else {
+      const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al eliminar tarea de Supabase');
+      console.error('Error en Supabase:', res.error);
+      alert(`Error en Supabase: ${errorMsg}`);
+    }
   };
 
   // Handle Quick Add Task
@@ -274,10 +302,16 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     try {
       setIsSubmittingTask(true);
       setTaskFeedback(null);
-      console.log("Procesando guardado de tarea...");
 
       const { data: { user } } = await supabase.auth.getUser();
-      let createdRow: any = null;
+      if (!user) {
+        setTaskFeedback({
+          type: 'error',
+          message: 'Usuario no autenticado en Supabase'
+        });
+        setIsSubmittingTask(false);
+        return;
+      }
 
       let targetProj: Project | undefined;
       if (targetProjectId === 'none' || !targetProjectId) {
@@ -312,38 +346,43 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
         }
       }
 
-      if (user) {
-        const validProjId = (targetProj.id === 'proj-other' || targetProj.id === 'none') ? null : targetProj.id;
-        const res = await createCloudTask({
-          title: newTitle,
-          completed: false,
-          dueDate: newTaskDueDate || undefined,
-          projectId: validProjId || undefined
-        });
+      const validProjId = (targetProj.id === 'proj-other' || targetProj.id === 'none') ? null : targetProj.id;
+      const assignedDueDate = newTaskDueDate || todayISO;
+      const isMyDayAssigned = assignedDueDate === todayISO;
 
-        if (res.error) {
-          console.error("Error al guardar tarea en Supabase:", res.error);
-          setTaskFeedback({
-            type: 'error',
-            message: `Error en Supabase: ${typeof res.error === 'string' ? res.error : (res.error?.message || 'Fallo de consulta')}`
-          });
-        } else {
-          console.log("Guardado exitoso en Supabase:", res.data);
-          createdRow = res.data;
-          setTaskFeedback({
-            type: 'success',
-            message: 'Tarea guardada y sincronizada correctamente en la nube'
-          });
-        }
-      } else {
-        console.log("Modo Explorador: Guardando tarea de forma local...");
+      const res = await createCloudTask({
+        title: newTitle,
+        completed: false,
+        dueDate: assignedDueDate,
+        projectId: validProjId || undefined,
+        isExec: true,
+        isMyDay: isMyDayAssigned
+      });
+
+      if (!res.success || res.error) {
+        const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Fallo al insertar tarea en Supabase');
+        console.error("Error al guardar tarea en Supabase:", res.error);
+        setTaskFeedback({
+          type: 'error',
+          message: `Error en Supabase: ${errorMsg}`
+        });
+        setIsSubmittingTask(false);
+        return; // Cancel local state update on error
       }
+
+      const createdRow = res.data;
+      setTaskFeedback({
+        type: 'success',
+        message: 'Tarea guardada y sincronizada correctamente en Supabase'
+      });
 
       const newTask: ProjectTask = {
         id: createdRow ? String(createdRow.id) : ('pt-' + Date.now().toString()),
         title: newTitle,
         completed: false,
-        dueDate: newTaskDueDate || undefined
+        dueDate: assignedDueDate,
+        isExec: true,
+        isMyDay: isMyDayAssigned
       };
 
       const updatedTasks = [...(targetProj.tasks || []), newTask];
@@ -369,7 +408,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
       console.error("Error inesperado al guardar tarea:", err);
       setTaskFeedback({
         type: 'error',
-        message: `Error al guardar tarea: ${err.message || 'Error inesperado'}`
+        message: `Error inesperado: ${err?.message || err}`
       });
     } finally {
       setIsSubmittingTask(false);

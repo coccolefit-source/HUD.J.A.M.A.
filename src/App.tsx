@@ -670,14 +670,6 @@ function App() {
       const [moved] = newHabits.splice(idx, 1);
       newHabits.splice(targetIdx, 0, moved);
 
-      // Persistir orden en localStorage
-      try {
-        const orderIds = newHabits.map(h => h.id);
-        localStorage.setItem('habitpulse_habits_order_v1', JSON.stringify(orderIds));
-      } catch (err) {
-        console.error("Error al persistir orden de hábitos:", err);
-      }
-
       return newHabits;
     });
   }, []);
@@ -879,21 +871,6 @@ function App() {
           streak: Number(r.streak), lastCompletedAt: r.last_completed_at, archived: Boolean(r.archived),
           daysOfWeek: r.days_of_week || []
         }));
-
-        try {
-          const orderStr = localStorage.getItem('habitpulse_habits_order_v1');
-          if (orderStr) {
-            const orderIds: string[] = JSON.parse(orderStr);
-            loadedHabits = loadedHabits.sort((a, b) => {
-              const idxA = orderIds.indexOf(a.id);
-              const idxB = orderIds.indexOf(b.id);
-              if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-              if (idxA !== -1) return -1;
-              if (idxB !== -1) return 1;
-              return 0;
-            });
-          }
-        } catch { }
 
         setHabits(loadedHabits);
       }

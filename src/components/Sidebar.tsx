@@ -60,16 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const safeSession = userSession || { email: '', hudName: 'HUD INVITADO', updatedAt: '' };
 
   const handleResetData = () => {
-    if (window.confirm("¿Confirmar reinicio táctico del sistema? Se borrarán todas las rachas, registros y puntos de experiencia, volviendo al Nivel 1.")) {
-      localStorage.clear();
-      const resetProfile = { streak: 0, xp: 0, level: 1, rankTitle: "OPERADOR NOVATO", progressPercentage: 0, isMaxLevel: false };
-      localStorage.setItem('habitpulse_profile_v1', JSON.stringify(resetProfile));
-      localStorage.setItem('habitpulse_user_session_v1', JSON.stringify({
-        email: '',
-        alias: '',
-        hudName: 'HUD INVITADO',
-        updatedAt: new Date().toISOString()
-      }));
+    if (window.confirm("¿Confirmar reinicio táctico del sistema?")) {
       if (onResetData) {
         onResetData();
       }

@@ -94,22 +94,12 @@ export const THEMES: ThemeConfig[] = [
   }
 ];
 
+let currentInMemTheme: ThemeId = 'jarvis_hud';
+
 export function getStoredTheme(): ThemeId {
-  try {
-    const saved = localStorage.getItem('habitpulse_theme');
-    if (saved && THEMES.some(t => t.id === saved)) {
-      return saved as ThemeId;
-    }
-  } catch (e) {
-    console.error('Error reading theme', e);
-  }
-  return 'jarvis_hud';
+  return currentInMemTheme;
 }
 
 export function saveStoredTheme(themeId: ThemeId): void {
-  try {
-    localStorage.setItem('habitpulse_theme', themeId);
-  } catch (e) {
-    console.error('Error saving theme', e);
-  }
+  currentInMemTheme = themeId;
 }
