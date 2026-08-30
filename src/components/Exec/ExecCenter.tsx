@@ -183,7 +183,11 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     };
 
     onSaveProject(updatedProject);
-    await updateCloudTask(taskId, { completed: newCompleted });
+    await updateCloudTask(taskId, { 
+      completed: newCompleted,
+      status: newCompleted ? 'completed' : 'pending',
+      isExec: true
+    });
   };
 
   // Handle update task due date directly
@@ -191,8 +195,9 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     const project = (projects || []).find(p => p.id === projectId);
     if (!project) return;
 
+    const isToday = newDueDate === todayISO;
     const updatedTasks = project.tasks.map(t => 
-      t.id === taskId ? { ...t, dueDate: newDueDate || undefined } : t
+      t.id === taskId ? { ...t, dueDate: newDueDate || undefined, isMyDay: isToday || t.isMyDay } : t
     );
 
     const updatedProject: Project = {
@@ -202,7 +207,40 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     };
 
     onSaveProject(updatedProject);
-    await updateCloudTask(taskId, { dueDate: newDueDate });
+    await updateCloudTask(taskId, { 
+      dueDate: newDueDate,
+      isMyDay: isToday,
+      isExec: true
+    });
+  };
+
+  // Handle toggle Mi Día
+  const handleToggleMyDay = async (projectId: string, taskId: string) => {
+    const project = (projects || []).find(p => p.id === projectId);
+    if (!project) return;
+
+    const targetTask = project.tasks.find(t => t.id === taskId);
+    if (!targetTask) return;
+
+    const newIsMyDay = !(targetTask.isMyDay || targetTask.dueDate === todayISO);
+    const newDueDate = newIsMyDay ? todayISO : targetTask.dueDate;
+
+    const updatedTasks = project.tasks.map(t => 
+      t.id === taskId ? { ...t, isMyDay: newIsMyDay, dueDate: newDueDate } : t
+    );
+
+    const updatedProject: Project = {
+      ...project,
+      tasks: updatedTasks,
+      updatedAt: new Date().toISOString()
+    };
+
+    onSaveProject(updatedProject);
+    await updateCloudTask(taskId, { 
+      isMyDay: newIsMyDay,
+      dueDate: newDueDate,
+      isExec: true
+    });
   };
 
   // Handle delete task
@@ -275,19 +313,27 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
       }
 
       if (user) {
+        const validProjId = (targetProj.id === 'proj-other' || targetProj.id === 'none') ? null : targetProj.id;
         const res = await createCloudTask({
           title: newTitle,
           completed: false,
           dueDate: newTaskDueDate || undefined,
-          projectId: targetProj.id
+          projectId: validProjId || undefined
         });
 
         if (res.error) {
-          console.error("Error al guardar en Supabase:", res.error);
+          console.error("Error al guardar tarea en Supabase:", res.error);
+          setTaskFeedback({
+            type: 'error',
+            message: `Error en Supabase: ${typeof res.error === 'string' ? res.error : (res.error?.message || 'Fallo de consulta')}`
+          });
         } else {
-          console.log("¡Guardado exitoso en la nube! Datos:", res.data);
-          // Opcional: mostrar notificación o simplemente dejar que `fetchInitialData` lo refresque
+          console.log("Guardado exitoso en Supabase:", res.data);
           createdRow = res.data;
+          setTaskFeedback({
+            type: 'success',
+            message: 'Tarea guardada y sincronizada correctamente en la nube'
+          });
         }
       } else {
         console.log("Modo Explorador: Guardando tarea de forma local...");
@@ -313,20 +359,84 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
 
       onSaveProject(updatedProject);
 
-      setTaskFeedback({
-        type: 'success',
-        message: '¡Tarea guardada y sincronizada correctamente!'
-      });
       setNewTaskTitle('');
       setNewTaskDueDate('');
 
       setTimeout(() => {
         setTaskFeedback(null);
-      }, 4000);
-    } catch (err) {
+      }, 5000);
+    } catch (err: any) {
       console.error("Error inesperado al guardar tarea:", err);
+      setTaskFeedback({
+        type: 'error',
+        message: `Error al guardar tarea: ${err.message || 'Error inesperado'}`
+      });
     } finally {
       setIsSubmittingTask(false);
+    }
+  };
+
+  // Handle reassigning task project
+  const handleReassignTaskProject = async (currentProjectId: string, taskId: string, newProjectId: string) => {
+    if (currentProjectId === newProjectId) return;
+
+    const sourceProject = (projects || []).find(p => p.id === currentProjectId);
+    if (!sourceProject) return;
+
+    const targetTask = sourceProject.tasks.find(t => t.id === taskId);
+    if (!targetTask) return;
+
+    // Remove task from source project
+    const updatedSourceTasks = sourceProject.tasks.filter(t => t.id !== taskId);
+    const sourceCompletedCount = updatedSourceTasks.filter(t => t.completed).length;
+    const sourceNewProgress = updatedSourceTasks.length > 0 
+      ? Math.min(100, Math.round((sourceCompletedCount / updatedSourceTasks.length) * 100))
+      : 0;
+
+    const updatedSourceProject: Project = {
+      ...sourceProject,
+      tasks: updatedSourceTasks,
+      progress: sourceNewProgress,
+      updatedAt: new Date().toISOString()
+    };
+    onSaveProject(updatedSourceProject);
+
+    // Add task to destination project
+    let destProject = (projects || []).find(p => p.id === newProjectId);
+    if (!destProject && newProjectId === 'proj-other') {
+      destProject = {
+        id: 'proj-other',
+        title: 'Sin Proyecto / Otros',
+        description: 'Contenedor de tareas independientes y sueltas',
+        status: 'En Progreso',
+        priority: 'Media',
+        startDate: todayISO,
+        progress: 0,
+        tasks: [],
+        createdAt: new Date().toISOString()
+      };
+    }
+
+    if (destProject) {
+      const updatedDestTasks = [...(destProject.tasks || []), targetTask];
+      const destCompletedCount = updatedDestTasks.filter(t => t.completed).length;
+      const destNewProgress = Math.min(100, Math.round((destCompletedCount / updatedDestTasks.length) * 100));
+
+      const updatedDestProject: Project = {
+        ...destProject,
+        tasks: updatedDestTasks,
+        progress: destNewProgress,
+        updatedAt: new Date().toISOString()
+      };
+      onSaveProject(updatedDestProject);
+    }
+
+    // Update Supabase
+    const validNewProjectId = (newProjectId === 'proj-other' || newProjectId === 'none') ? null : newProjectId;
+    const res = await updateCloudTask(taskId, { projectId: validNewProjectId || undefined });
+
+    if (!res.success) {
+      console.error('Error al mover tarea de proyecto en Supabase:', res.error);
     }
   };
 
@@ -418,11 +528,11 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
               onChange={(e) => setTargetProjectId(e.target.value)}
               className="px-3 py-2.5 bg-[#0A0D14] border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-[#00F0FF] font-mono shrink-0 min-w-[170px]"
             >
-              <option value="none">📁 Sin Proyecto (Otros)</option>
+              <option value="none">Sin Proyecto (Otros)</option>
               {projects
                 .filter(p => p.id !== 'proj-other' && p.title !== 'Sin Proyecto / Otros')
                 .map(p => (
-                  <option key={p.id} value={p.id}>📁 {p.title}</option>
+                  <option key={p.id} value={p.id}>{p.title}</option>
                 ))}
             </select>
 
@@ -454,7 +564,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
               ? 'bg-[#10B981]/15 text-[#10B981] border-[#10B981]/30'
               : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
           }`}>
-            <span>{taskFeedback.type === 'success' ? '✓' : '⚠️'}</span>
+            <span>{taskFeedback.type === 'success' ? 'OK:' : 'ERROR:'}</span>
             <span>{taskFeedback.message}</span>
           </div>
         )}
@@ -533,12 +643,12 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
             onChange={(e) => setSelectedProjectId(e.target.value)}
             className="px-3 py-2 bg-[#0A0D14] border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-[#00F0FF] font-mono shrink-0"
           >
-            <option value="all">📁 Todos los Proyectos</option>
-            <option value="none">📁 Sin Proyecto / Otros</option>
+            <option value="all">Todos los Proyectos</option>
+            <option value="none">Sin Proyecto / Otros</option>
             {projects
               .filter(p => p.id !== 'proj-other' && p.title !== 'Sin Proyecto / Otros')
               .map(p => (
-                <option key={p.id} value={p.id}>📁 {p.title}</option>
+                <option key={p.id} value={p.id}>{p.title}</option>
               ))}
           </select>
 
@@ -548,7 +658,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
             onChange={(e) => setSelectedPriority(e.target.value)}
             className="px-3 py-2 bg-[#0A0D14] border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-[#00F0FF] font-mono shrink-0"
           >
-            <option value="all">⚡ Todas las Prioridades</option>
+            <option value="all">Todas las Prioridades</option>
             <option value="Alta">Alta</option>
             <option value="Media">Media</option>
             <option value="Baja">Baja</option>
@@ -576,7 +686,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
             LISTADO DE EJECUCIÓN ({filteredTasks.length} Tareas)
           </span>
           <span className="text-[10px] text-slate-500 hidden sm:inline">
-            Alineación flexbox space-between con fecha límite individual editable
+            Sincronización directa y persistente con Supabase
           </span>
         </div>
 
@@ -639,15 +749,23 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
                           {task.title}
                         </span>
 
-                        {/* Origin Project Badge */}
-                        <span className="px-2 py-0.5 rounded bg-slate-800/80 text-slate-400 text-[10px] font-mono border border-slate-700/70 shrink-0 flex items-center gap-1">
+                        {/* Origin Project Selector/Badge */}
+                        <div className="flex items-center gap-1 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/70 shrink-0">
                           <FolderKanban className="w-2.5 h-2.5 text-[#00F0FF]" />
-                          <span className="truncate max-w-[140px]">
-                            {project.id === 'proj-other' || project.title === 'Sin Proyecto / Otros' || project.title === 'Otros' || !project.title
-                              ? '[ OTROS ]'
-                              : project.title}
-                          </span>
-                        </span>
+                          <select
+                            value={project.id}
+                            onChange={(e) => handleReassignTaskProject(project.id, task.id, e.target.value)}
+                            className="bg-transparent text-slate-300 text-[10px] font-mono focus:outline-none cursor-pointer max-w-[130px] truncate"
+                            title="Cambiar proyecto de esta tarea"
+                          >
+                            <option value="proj-other" className="bg-[#0A0D14] text-slate-300">[ OTROS ]</option>
+                            {projects
+                              .filter(p => p.id !== 'proj-other' && p.title !== 'Sin Proyecto / Otros')
+                              .map(p => (
+                                <option key={p.id} value={p.id} className="bg-[#0A0D14] text-slate-300">{p.title}</option>
+                              ))}
+                          </select>
+                        </div>
 
                         {/* Priority Badge */}
                         {project.priority && (
@@ -666,7 +784,21 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
                   </div>
 
                   {/* RIGHT ALIGNED: INDIVIDUAL DEADLINE & ACTION BUTTONS */}
-                  <div className="flex items-center gap-2.5 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* TOGGLE MI DÍA BUTTON */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleMyDay(project.id, task.id)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer border shrink-0 ${
+                        (task.isMyDay || task.dueDate === todayISO)
+                          ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/50'
+                          : 'bg-slate-800/60 text-slate-400 border-slate-700/60 hover:text-slate-200 hover:border-slate-600'
+                      }`}
+                      title={(task.isMyDay || task.dueDate === todayISO) ? 'Asignada a Mi Día (Clic para desmarcar)' : 'Asignar a Mi Día'}
+                    >
+                      Mi Día
+                    </button>
+
                     {/* INDIVIDUAL DEADLINE EDITABLE INPUT BADGE */}
                     <div className="relative group/date flex items-center">
                       <input
@@ -686,7 +818,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
                           : 'bg-[#00F0FF]/10 text-[#00F0FF] border-[#00F0FF]/30 hover:bg-[#00F0FF]/20'
                       }`}>
                         <Calendar className="w-3 h-3 shrink-0 text-[#00F0FF]" />
-                        <span>📅 {formatDueDateLabel(task.dueDate)}</span>
+                        <span>{formatDueDateLabel(task.dueDate)}</span>
                       </span>
                     </div>
 

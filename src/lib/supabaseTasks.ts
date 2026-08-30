@@ -12,11 +12,12 @@ export interface TaskCloudPayload {
   id?: string;
   priority?: string;
   status?: string;
+  isExec?: boolean;
+  isMyDay?: boolean;
 }
 
 /**
- * 1. Obtener tareas desde Supabase:
- * const { data, error } = await supabase.from('tasks').select('*');
+ * 1. Obtener tareas desde Supabase
  */
 export async function fetchCloudTasks(userId?: string): Promise<{ task: ProjectTask; projectId?: string }[]> {
   if (!isSupabaseConfigured) {
@@ -40,16 +41,31 @@ export async function fetchCloudTasks(userId?: string): Promise<{ task: ProjectT
     }
 
     const validTasks = data.filter((row: any) => row.type !== 'habit' && row.type !== 'Habit' && typeof row.frequency === 'undefined');
+    const todayISO = new Date().toISOString().split('T')[0];
 
-    return validTasks.map(row => ({
-      task: {
-        id: String(row.id),
-        title: row.title || 'Tarea sin título',
-        completed: Boolean(row.completed || row.status === 'completed'),
-        dueDate: row.due_date || row.date || undefined
-      },
-      projectId: row.project_id || undefined
-    }));
+    return validTasks.map(row => {
+      const isMyDayCalculated = row.is_my_day !== undefined && row.is_my_day !== null 
+        ? Boolean(row.is_my_day) 
+        : (row.due_date === todayISO || row.date === todayISO);
+      const isExecCalculated = row.is_exec !== undefined && row.is_exec !== null
+        ? Boolean(row.is_exec)
+        : true;
+
+      return {
+        task: {
+          id: String(row.id),
+          title: row.title || 'Tarea sin título',
+          description: row.description || '',
+          completed: Boolean(row.completed || row.status === 'completed'),
+          dueDate: row.due_date || row.date || undefined,
+          priority: row.priority || 'medium',
+          status: row.status || (row.completed ? 'completed' : 'pending'),
+          isExec: isExecCalculated,
+          isMyDay: isMyDayCalculated
+        },
+        projectId: row.project_id || undefined
+      };
+    });
   } catch (err) {
     console.error('Error al consultar tareas de Supabase:', err);
     return [];
@@ -57,49 +73,60 @@ export async function fetchCloudTasks(userId?: string): Promise<{ task: ProjectT
 }
 
 /**
- * 2. Guardar tarea en Supabase:
+ * 2. Guardar tarea en Supabase
  */
 export async function createCloudTask(task: TaskCloudPayload): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      console.warn("ATENCIÓN: No hay sesión detectada en Supabase. Se guardará solo temporalmente.");
-      const existing = getGuestTasks();
-      const guestTask = { ...task, id: 'guest_' + Date.now(), completed: false };
-      saveGuestTasks([...existing, guestTask]);
-      return { success: true, data: guestTask };
+      console.warn("ATENCIÓN: No hay sesión detectada en Supabase.");
+      return { success: false, error: "Usuario no autenticado en Supabase" };
     }
 
-    const validProjectId = (task.projectId && !String(task.projectId).startsWith('guest_') && !String(task.projectId).startsWith('proj-')) ? task.projectId : null;
+    const isTempProjId = !task.projectId || String(task.projectId).startsWith('guest_') || String(task.projectId).startsWith('proj-temp-');
+    const validProjectId = isTempProjId ? null : task.projectId;
+    const todayISO = new Date().toISOString().split('T')[0];
+    const isToday = task.dueDate === todayISO;
 
-    const payload = {
+    const payload: Record<string, any> = {
       user_id: user.id,
       title: task.title ? task.title.trim() : 'Nueva Tarea',
       description: task.description || '',
-      completed: false,
+      completed: Boolean(task.completed),
       priority: task.priority || 'medium',
-      status: 'pending',
-      due_date: task.dueDate || new Date().toLocaleDateString('sv-SE'),
-      project_id: validProjectId
+      status: task.completed ? 'completed' : (task.status || 'pending'),
+      due_date: task.dueDate || todayISO,
+      project_id: validProjectId,
+      is_exec: task.isExec !== undefined ? Boolean(task.isExec) : true,
+      is_my_day: task.isMyDay !== undefined ? Boolean(task.isMyDay) : Boolean(isToday)
     };
 
-    console.log("PAYLOAD A INSERTAR (tasks):", payload);
-    const { data, error } = await supabase.from('tasks').insert([payload]).select();
+    console.log("PAYLOAD A INSERTAR EN SUPABASE (tasks):", payload);
+    let { data, error } = await supabase.from('tasks').insert([payload]).select();
+
+    if (error && (error.message?.includes('is_exec') || error.message?.includes('is_my_day'))) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.is_exec;
+      delete fallbackPayload.is_my_day;
+      const retry = await supabase.from('tasks').insert([fallbackPayload]).select();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
-      console.error("ERROR EN INSERT [tasks]:", error);
-      return { success: false, error };
-    } else {
-      console.log("TAREA GUARDADA CON ÉXITO EN SUPABASE");
-      if (data && data[0]) {
-        return { success: true, data: data[0] };
-      }
+      console.error("ERROR AL INSERTAR TAREA EN SUPABASE (RLS/Tabla/Columna):", error);
+      return { success: false, error: error.message || error };
+    }
+
+    console.log("TAREA GUARDADA EXITOSAMENTE EN SUPABASE:", data);
+    if (data && data[0]) {
+      return { success: true, data: data[0] };
     }
 
     return { success: true };
   } catch (err: any) {
-    console.error("Error guardando tarea:", err);
+    console.error("Error imprevisto guardando tarea en Supabase:", err);
     return { success: false, error: err };
   }
 }
@@ -109,7 +136,17 @@ export async function createCloudTask(task: TaskCloudPayload): Promise<{ success
  */
 export async function updateCloudTask(
   taskId: string,
-  updates: { completed?: boolean; title?: string; dueDate?: string; priority?: string; status?: string; projectId?: string }
+  updates: { 
+    completed?: boolean; 
+    title?: string; 
+    dueDate?: string; 
+    priority?: string; 
+    status?: string; 
+    projectId?: string;
+    isExec?: boolean;
+    isMyDay?: boolean;
+    description?: string;
+  }
 ): Promise<{ success: boolean; error?: any }> {
   if (!isSupabaseConfigured || String(taskId).startsWith('guest_')) {
     return { success: true };
@@ -130,8 +167,15 @@ export async function updateCloudTask(
     if (updates.title !== undefined) {
       updatePayload.title = updates.title;
     }
+    if (updates.description !== undefined) {
+      updatePayload.description = updates.description;
+    }
     if (updates.dueDate !== undefined) {
       updatePayload.due_date = updates.dueDate || null;
+      const todayISO = new Date().toISOString().split('T')[0];
+      if (updates.dueDate === todayISO) {
+        updatePayload.is_my_day = true;
+      }
     }
     if (updates.priority !== undefined) {
       updatePayload.priority = updates.priority;
@@ -142,15 +186,34 @@ export async function updateCloudTask(
     if (updates.projectId !== undefined) {
       updatePayload.project_id = updates.projectId || null;
     }
+    if (updates.isExec !== undefined) {
+      updatePayload.is_exec = updates.isExec;
+    }
+    if (updates.isMyDay !== undefined) {
+      updatePayload.is_my_day = updates.isMyDay;
+    }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('tasks')
       .update(updatePayload)
       .eq('id', taskId)
       .eq('user_id', user.id);
 
+    if (error && (error.message?.includes('is_exec') || error.message?.includes('is_my_day'))) {
+      const fallbackPayload = { ...updatePayload };
+      delete fallbackPayload.is_exec;
+      delete fallbackPayload.is_my_day;
+      const retry = await supabase
+        .from('tasks')
+        .update(fallbackPayload)
+        .eq('id', taskId)
+        .eq('user_id', user.id);
+      if (!retry.error) return { success: true };
+      return { success: false, error: retry.error };
+    }
+
     if (error) {
-      console.error('Error al actualizar tarea:', error);
+      console.error('Error al actualizar tarea en Supabase:', error);
       return { success: false, error };
     }
 

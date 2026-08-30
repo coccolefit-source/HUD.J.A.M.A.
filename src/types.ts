@@ -115,6 +115,11 @@ export interface ProjectTask {
   title: string;
   completed: boolean;
   dueDate?: string;
+  isExec?: boolean;
+  isMyDay?: boolean;
+  description?: string;
+  priority?: string;
+  status?: string;
 }
 
 export interface Project {

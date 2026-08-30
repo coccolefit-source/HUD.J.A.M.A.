@@ -898,36 +898,131 @@ function App() {
         setHabits(loadedHabits);
       }
       
-      // Desduplicar tareas cargadas de Supabase para evitar repeticiones
+      // Process tasks loaded from Supabase
       const seenTaskKeys = new Set<string>();
-      const allTasks: any[] = [];
+      const todayISO = new Date().toISOString().split('T')[0];
+      const allTasks: Array<{ 
+        id: string; 
+        projectId: string; 
+        title: string; 
+        completed: boolean; 
+        dueDate?: string;
+        isExec?: boolean;
+        isMyDay?: boolean;
+        description?: string;
+        priority?: string;
+        status?: string;
+      }> = [];
+      
       for (const t of (tasksRes.data || [])) {
-        const taskKey = `${t.project_id}_${t.title}_${t.due_date || t.date || ''}`;
+        const tId = String(t.id);
+        const pId = (t.project_id && t.project_id !== 'null') ? String(t.project_id) : 'proj-other';
+        const taskKey = `${tId}_${pId}_${t.title}`;
+        
         if (!seenTaskKeys.has(taskKey)) {
           seenTaskKeys.add(taskKey);
+          const isMyDayCalculated = t.is_my_day !== undefined && t.is_my_day !== null
+            ? Boolean(t.is_my_day)
+            : (t.due_date === todayISO || t.date === todayISO);
+          const isExecCalculated = t.is_exec !== undefined && t.is_exec !== null
+            ? Boolean(t.is_exec)
+            : true;
+
           allTasks.push({
-            id: String(t.id),
-            projectId: String(t.project_id),
-            title: t.title,
+            id: tId,
+            projectId: pId,
+            title: t.title || 'Tarea sin título',
+            description: t.description || '',
             completed: Boolean(t.completed || t.status === 'completed'),
-            dueDate: t.due_date || t.date || undefined
+            dueDate: t.due_date || t.date || undefined,
+            isExec: isExecCalculated,
+            isMyDay: isMyDayCalculated,
+            priority: t.priority || 'medium',
+            status: t.status || (t.completed ? 'completed' : 'pending')
           });
         }
       }
 
-      if (projectsRes.data) {
-         setProjects(projectsRes.data.map((r: any) => {
-            const projectTasks = allTasks
-              .filter((t: any) => t.projectId === String(r.id))
-              .map((t: any) => ({ id: t.id, title: t.title, completed: t.completed, dueDate: t.dueDate }));
-            return {
-              id: String(r.id), title: r.title, description: r.description,
-              status: r.status, priority: r.priority, progress: r.progress,
-              startDate: r.start_date, endDate: r.end_date, tasks: projectTasks,
-              createdAt: r.created_at || new Date().toISOString()
-            };
-         }));
+      // Track tasks assigned to loaded projects
+      const assignedTaskIds = new Set<string>();
+      const loadedProjects: Project[] = (projectsRes.data || []).map((r: any) => {
+        const pIdStr = String(r.id);
+        const projectTasks = allTasks.filter((t) => t.projectId === pIdStr);
+        projectTasks.forEach(t => assignedTaskIds.add(t.id));
+
+        return {
+          id: pIdStr,
+          title: r.title || 'Proyecto sin título',
+          description: r.description || '',
+          status: r.status || 'Planificación',
+          priority: r.priority || 'Media',
+          progress: typeof r.progress === 'number' ? r.progress : 0,
+          startDate: r.start_date || todayISO,
+          endDate: r.end_date || undefined,
+          tasks: projectTasks.map(t => ({ 
+            id: t.id, 
+            title: t.title, 
+            completed: t.completed, 
+            dueDate: t.dueDate,
+            isExec: t.isExec,
+            isMyDay: t.isMyDay,
+            description: t.description,
+            priority: t.priority,
+            status: t.status
+          })),
+          createdAt: r.created_at || new Date().toISOString()
+        };
+      });
+
+      // Gather any unassigned tasks (e.g., project_id null or proj-other)
+      const unassignedTasks = allTasks.filter(t => !assignedTaskIds.has(t.id));
+
+      let otherProject = loadedProjects.find(p => p.id === 'proj-other' || p.title === 'Sin Proyecto / Otros' || p.title === 'Otros');
+      if (unassignedTasks.length > 0 || !otherProject) {
+        if (otherProject) {
+          const existingIds = new Set(otherProject.tasks.map(t => t.id));
+          unassignedTasks.forEach(t => {
+            if (!existingIds.has(t.id)) {
+              otherProject!.tasks.push({ 
+                id: t.id, 
+                title: t.title, 
+                completed: t.completed, 
+                dueDate: t.dueDate,
+                isExec: t.isExec,
+                isMyDay: t.isMyDay,
+                description: t.description,
+                priority: t.priority,
+                status: t.status
+              });
+            }
+          });
+        } else {
+          otherProject = {
+            id: 'proj-other',
+            title: 'Sin Proyecto / Otros',
+            description: 'Contenedor de tareas independientes y sueltas',
+            status: 'En Progreso',
+            priority: 'Media',
+            startDate: todayISO,
+            progress: 0,
+            tasks: unassignedTasks.map(t => ({ 
+              id: t.id, 
+              title: t.title, 
+              completed: t.completed, 
+              dueDate: t.dueDate,
+              isExec: t.isExec,
+              isMyDay: t.isMyDay,
+              description: t.description,
+              priority: t.priority,
+              status: t.status
+            })),
+            createdAt: new Date().toISOString()
+          };
+          loadedProjects.push(otherProject);
+        }
       }
+
+      setProjects(loadedProjects);
       
       if (ideasRes.data) {
          setIdeas(ideasRes.data.map((r: any) => ({
@@ -990,6 +1085,42 @@ function App() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [loadAllUserData]);
+
+  // Supabase Realtime Subscription for tasks & projects
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    let channel: any = null;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+
+      channel = supabase
+        .channel(`tasks-projects-realtime-${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` },
+          (payload) => {
+            console.log('Cambio en tiempo real en tabla tasks:', payload);
+            loadAllUserData(user.id);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'projects', filter: `user_id=eq.${user.id}` },
+          (payload) => {
+            console.log('Cambio en tiempo real en tabla projects:', payload);
+            loadAllUserData(user.id);
+          }
+        )
+        .subscribe();
+    });
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [loadAllUserData, isAuthenticated]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
