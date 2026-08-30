@@ -40,8 +40,8 @@ const INFO_TEMPLATES = [
     tooltip: 'Agregar sección de recursos necesarios'
   },
   {
-    label: '💡 Inspiración / Referencias',
-    content: '\n\n### 💡 Inspiración y Referencias:\n- Enlaces clave:\n- Ejemplos similares:\n- Ideas clave:',
+    label: 'Inspiración / Referencias',
+    content: '\n\n### Inspiración y Referencias:\n- Enlaces clave:\n- Ejemplos similares:\n- Ideas clave:',
     tooltip: 'Agregar sección de inspiración'
   }
 ];
@@ -256,7 +256,7 @@ export const IdeasRadar: React.FC<IdeasRadarProps> = ({
               className="px-6 py-2.5 rounded-lg bg-[#F59E0B]/20 hover:bg-[#F59E0B]/30 text-[#F59E0B] font-mono font-bold text-sm border border-[#F59E0B]/50 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              {isSubmitting ? 'REGISTRANDO...' : '⚡ REGISTRAR IDEA'}
+              {isSubmitting ? 'REGISTRANDO...' : 'REGISTRAR IDEA'}
             </button>
           </div>
         </form>

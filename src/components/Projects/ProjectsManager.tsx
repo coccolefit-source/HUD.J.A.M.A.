@@ -175,8 +175,20 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     if (!targetTask) return;
 
     const newCompleted = !targetTask.completed;
+    
+    const res = await updateCloudTask(taskId, { 
+      completed: newCompleted,
+      status: newCompleted ? 'completed' : 'pending'
+    });
+
+    if (!res.success || res.error) {
+      const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar tarea en Supabase');
+      alert(`Error en Supabase: ${errorMsg}`);
+      return;
+    }
+
     const updatedTasks = project.tasks.map(t => 
-      t.id === taskId ? { ...t, completed: newCompleted } : t
+      t.id === taskId ? { ...t, completed: newCompleted, status: newCompleted ? 'completed' : 'pending' } : t
     );
 
     // Auto calculate progress percentage based on completed tasks if tasks exist
@@ -193,7 +205,6 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     };
 
     onSaveProject(updatedProject);
-    await updateCloudTask(taskId, { completed: newCompleted });
   };
 
   // Quick Progress Adjuster
@@ -508,7 +519,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                                 : 'bg-[#00F0FF]/10 text-[#00F0FF] border-[#00F0FF]/30'
                             }`}>
                               <Calendar className="w-2.5 h-2.5 shrink-0 text-[#00F0FF]" />
-                              <span>📅 {isDueToday ? 'HOY' : formatDueDateLabel(task.dueDate)}</span>
+                              <span>{isDueToday ? 'HOY' : formatDueDateLabel(task.dueDate)}</span>
                             </span>
                           )}
                         </li>

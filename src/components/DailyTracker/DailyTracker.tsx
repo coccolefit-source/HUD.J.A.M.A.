@@ -22,7 +22,6 @@ import {
 import { Habit, DailyLog, CategoryType, SportType, SportsEntry, Project, ProjectTask } from '../../types';
 import { updateCloudTask } from '../../lib/supabaseTasks';
 import { supabase } from '../../lib/supabase';
-import { getGuestTasks, saveGuestTasks } from '../../utils/storage';
 import { HabitCard } from './HabitCard';
 import { AddEditHabitModal } from './AddEditHabitModal';
 import { DayClosureModal } from './DayClosureModal';
@@ -67,21 +66,21 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'Todos' | CategoryType>('Todos');
 
-  // Filter tasks from projects that are scheduled for the selected date
+  // Filter tasks from projects that are scheduled for the selected date or marked for My Day
   const execTodayTasks = useMemo(() => {
     if (!projects || projects.length === 0) return [];
     const list: { task: ProjectTask; project: Project }[] = [];
     projects.forEach(project => {
       if (project.tasks && project.tasks.length > 0) {
         project.tasks.forEach(task => {
-          if (task.dueDate === selectedDate) {
+          if (task.dueDate === selectedDate || (selectedDate === todayStr && task.isMyDay)) {
             list.push({ task, project });
           }
         });
       }
     });
     return list;
-  }, [projects, selectedDate]);
+  }, [projects, selectedDate, todayStr]);
 
   // Handle toggling project task from tracker
   const handleToggleExecTask = async (projectId: string, taskId: string) => {
@@ -93,8 +92,26 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
     if (!targetTask) return;
 
     const newCompleted = !targetTask.completed;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      alert("Debes estar autenticado en Supabase para actualizar tareas.");
+      return;
+    }
+
+    const res = await updateCloudTask(taskId, { 
+      completed: newCompleted,
+      status: newCompleted ? 'completed' : 'pending'
+    });
+
+    if (!res.success || res.error) {
+      const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar tarea en Supabase');
+      alert(`Error en Supabase: ${errorMsg}`);
+      return;
+    }
+
     const updatedTasks = project.tasks.map(t => 
-      t.id === taskId ? { ...t, completed: newCompleted } : t
+      t.id === taskId ? { ...t, completed: newCompleted, status: newCompleted ? 'completed' : 'pending' } : t
     );
 
     const completedCount = updatedTasks.filter(t => t.completed).length;
@@ -110,20 +127,6 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
     };
 
     onSaveProject(updatedProject);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && !String(taskId).startsWith('guest_')) {
-        await updateCloudTask(taskId, { completed: newCompleted });
-      } else {
-        const savedGuestTasks = getGuestTasks();
-        const updatedGuestTasks = savedGuestTasks.map(t => t.id === taskId ? { ...t, completed: newCompleted } : t);
-        saveGuestTasks(updatedGuestTasks);
-      }
-    } catch (e) {
-      const savedGuestTasks = getGuestTasks();
-      const updatedGuestTasks = savedGuestTasks.map(t => t.id === taskId ? { ...t, completed: newCompleted } : t);
-      saveGuestTasks(updatedGuestTasks);
-    }
   };
 
   // Daily wins input state

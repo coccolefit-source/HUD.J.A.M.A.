@@ -405,7 +405,7 @@ export const ReviewInsights: React.FC<ReviewInsightsProps> = ({
 
                 {/* Direct Benefits Gained Box */}
                 <div className="p-3 rounded-xl bg-[#00F0FF]/10 border border-[#00F0FF]/30 text-xs font-mono">
-                  <span className="font-bold text-[#00F0FF] block mb-1">⚡ Beneficios Neuro-Fisiológicos:</span>
+                  <span className="font-bold text-[#00F0FF] block mb-1">Beneficios Neuro-Fisiológicos:</span>
                   <p className="text-slate-200 text-[11px] leading-relaxed">
                     {getNeuroBenefits(periodData.bestHabit).gained}
                   </p>
