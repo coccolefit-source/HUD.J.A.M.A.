@@ -1076,15 +1076,55 @@ function App() {
         .channel(uniqueChannelId)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` },
+          { event: '*', schema: 'public', table: 'tasks' },
           (payload) => {
             console.log('Cambio en tiempo real en tabla tasks:', payload);
+
+            // Directly update task completed status in local state for instant real-time feedback across devices
+            if ((payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') && payload.new) {
+              const updatedTaskId = String(payload.new.id);
+              const newCompleted = Boolean(payload.new.completed || payload.new.status === 'completed');
+              const newStatus = payload.new.status || (newCompleted ? 'completed' : 'pending');
+
+              setProjects(prevProjects => {
+                return prevProjects.map(proj => {
+                  const hasTask = proj.tasks.some(t => String(t.id) === updatedTaskId);
+                  if (!hasTask) return proj;
+
+                  const updatedTasks = proj.tasks.map(t => {
+                    if (String(t.id) === updatedTaskId) {
+                      return {
+                        ...t,
+                        completed: newCompleted,
+                        status: newStatus,
+                        dueDate: payload.new.due_date || payload.new.date || t.dueDate,
+                        title: payload.new.title || t.title
+                      };
+                    }
+                    return t;
+                  });
+
+                  const completedCount = updatedTasks.filter(t => t.completed).length;
+                  const newProgress = updatedTasks.length > 0
+                    ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
+                    : proj.progress;
+
+                  return {
+                    ...proj,
+                    tasks: updatedTasks,
+                    progress: newProgress,
+                    status: newProgress === 100 ? 'Completado' : (proj.status === 'Completado' ? 'En Progreso' : proj.status)
+                  };
+                });
+              });
+            }
+
             loadAllUserData(user.id);
           }
         )
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'projects', filter: `user_id=eq.${user.id}` },
+          { event: '*', schema: 'public', table: 'projects' },
           (payload) => {
             console.log('Cambio en tiempo real en tabla projects:', payload);
             loadAllUserData(user.id);

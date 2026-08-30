@@ -196,8 +196,7 @@ export async function updateCloudTask(
     let { data, error } = await supabase
       .from('tasks')
       .update(updatePayload)
-      .eq('id', taskId)
-      .eq('user_id', user.id);
+      .eq('id', taskId);
 
     if (error && (error.message?.includes('is_exec') || error.message?.includes('is_my_day'))) {
       const fallbackPayload = { ...updatePayload };
@@ -206,8 +205,7 @@ export async function updateCloudTask(
       const retry = await supabase
         .from('tasks')
         .update(fallbackPayload)
-        .eq('id', taskId)
-        .eq('user_id', user.id);
+        .eq('id', taskId);
       if (!retry.error) return { success: true };
       return { success: false, error: retry.error };
     }
