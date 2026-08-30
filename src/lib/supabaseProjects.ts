@@ -122,11 +122,18 @@ export async function fetchCloudProjects(userId?: string): Promise<Project[]> {
 }
 
 export async function deleteCloudProject(projectId: string): Promise<{ success: boolean; data?: any; error?: any }> {
-  if (!isSupabaseConfigured || String(projectId).startsWith('guest_')) return { success: true };
+  if (!isSupabaseConfigured || String(projectId).startsWith('guest_') || projectId === 'proj-other') return { success: true };
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { console.error("No hay usuario autenticado. Cancelando guardado de proyecto."); return { success: false, error: "Usuario no autenticado" }; }
+    if (!user) { 
+      console.error("No hay usuario autenticado. Cancelando eliminación de proyecto."); 
+      return { success: false, error: "Usuario no autenticado" }; 
+    }
 
+    // 1. Delete associated tasks first to prevent FK or orphan issues
+    await supabase.from('tasks').delete().eq('project_id', projectId).eq('user_id', user.id);
+
+    // 2. Delete project from Supabase
     const { data, error } = await supabase
       .from('projects')
       .delete()

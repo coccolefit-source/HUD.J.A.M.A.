@@ -311,108 +311,90 @@ function App() {
 
   const handleSaveIdea = async (idea: Idea) => {
     try {
-      const newIdea = {
-        ...idea,
-        id: idea.id || String(Date.now()),
-        createdAt: idea.createdAt || new Date().toISOString()
-      };
-      
-      // Actualizar estado local e inmediatamente guardar en storage local
-      setIdeas(prev => {
-        const updated = [newIdea, ...prev];
-        saveGuestIdeas(updated);
-        return updated;
-      });
-
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const res = await createCloudIdea(newIdea);
-        if (res.error) {
-          console.error("Error al insertar idea en Supabase:", res.error);
-          showToast("Guardada localmente. Error en nube.");
-        } else if (res.data) {
-          setIdeas(prev => {
-            const updated = prev.map(i => i.id === newIdea.id ? { ...i, ...res.data } : i);
-            saveGuestIdeas(updated);
-            return updated;
-          });
-          showToast("Idea guardada con éxito en la nube.");
-        }
-      } else {
-        showToast("Idea guardada localmente.");
+      if (!user) {
+        alert("Debes estar autenticado en Supabase para crear ideas.");
+        return;
       }
+
+      const res = await createCloudIdea(idea);
+      if (!res.success || res.error) {
+        const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al guardar idea en Supabase');
+        console.error("Error al insertar idea en Supabase:", res.error);
+        alert(`Error en Supabase: ${errorMsg}`);
+        return;
+      }
+
+      const createdIdea: Idea = res.data ? res.data : {
+        ...idea,
+        id: String(Date.now()),
+        createdAt: new Date().toISOString()
+      };
+
+      setIdeas(prev => [createdIdea, ...prev]);
+      showToast("Idea guardada con éxito en Supabase.");
     } catch (err: any) {
       console.error("Error al guardar idea:", err);
-      showToast("Error: " + (err.message || err));
+      alert(`Error al guardar idea: ${err.message || err}`);
     }
   };
 
   const handleUpdateIdea = async (ideaId: string, updates: Partial<Idea>) => {
     try {
-      // 1. Actualización inmediata del estado React y almacenamiento local
-      setIdeas(prev => {
-        const updated = prev.map(i => i.id === ideaId ? { ...i, ...updates } : i);
-        saveGuestIdeas(updated);
-        return updated;
-      });
-
-      // 2. Intentar guardar en Supabase si hay usuario autenticado
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const res = await updateCloudIdea(ideaId, updates);
-        if (res.error) {
-          console.error("Error al actualizar idea en Supabase:", res.error);
-          showToast("Guardada localmente. Error al sincronizar en nube.");
-        } else if (res.data) {
-          setIdeas(prev => {
-            const updated = prev.map(i => i.id === ideaId ? { ...i, ...res.data } : i);
-            saveGuestIdeas(updated);
-            return updated;
-          });
-          showToast("Idea actualizada con éxito.");
-        } else {
-          showToast("Idea actualizada.");
-        }
-      } else {
-        showToast("Idea actualizada localmente.");
+      if (!user) {
+        alert("Debes estar autenticado en Supabase para actualizar ideas.");
+        return;
       }
+
+      const res = await updateCloudIdea(ideaId, updates);
+      if (!res.success || res.error) {
+        const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar idea en Supabase');
+        console.error("Error al actualizar idea en Supabase:", res.error);
+        alert(`Error en Supabase: ${errorMsg}`);
+        return;
+      }
+
+      setIdeas(prev => prev.map(i => i.id === ideaId ? { ...i, ...updates } : i));
+      showToast("Idea actualizada con éxito en Supabase.");
     } catch (err: any) {
       console.error("Error al actualizar idea:", err);
-      showToast("Error al sincronizar: " + (err.message || err));
+      alert(`Error al actualizar idea: ${err.message || err}`);
     }
   };
 
   const handleDeleteIdea = async (ideaId: string) => {
     try {
-      setIdeas(prev => {
-        const updated = prev.filter(i => i.id !== ideaId);
-        saveGuestIdeas(updated);
-        return updated;
-      });
-
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const res = await deleteCloudIdea(ideaId);
-        if (res.error) {
-          console.error("Error al eliminar idea en nube:", res.error);
-        } else {
-          showToast("Idea eliminada.");
-        }
-      } else {
-        showToast("Idea eliminada localmente.");
+      if (!user) {
+        alert("Debes estar autenticado en Supabase para eliminar ideas.");
+        return;
       }
+
+      const res = await deleteCloudIdea(ideaId);
+      if (!res.success || res.error) {
+        const errorMsg = typeof res.error === 'string' ? res.error : (res.error || 'Error al eliminar idea de Supabase');
+        console.error("Error al eliminar idea en Supabase:", res.error);
+        alert(`Error en Supabase: ${errorMsg}`);
+        return;
+      }
+
+      setIdeas(prev => prev.filter(i => i.id !== ideaId));
+      showToast("Idea eliminada de Supabase.");
     } catch (e: any) {
       console.error("Error al eliminar idea:", e);
-      showToast("Error: " + (e.message || e));
+      alert(`Error al eliminar idea: ${e.message || e}`);
     }
   };
 
   const handleConvertIdeaToProject = async (idea: Idea) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        alert("Debes estar autenticado en Supabase.");
+        return;
+      }
 
-      // 1. Preparar payload de proyecto
       const projectPayload = {
         title: idea.title,
         description: idea.notes || (idea as any).description || '',
@@ -422,26 +404,30 @@ function App() {
         progress: 0
       };
 
-      // 2. Ejecutar inserción de proyecto y borrado de idea en paralelo
-      const [projectRes] = await Promise.all([
+      const [projectRes, ideaRes] = await Promise.all([
         createCloudProject(projectPayload),
         deleteCloudIdea(idea.id)
       ]);
 
-      if (projectRes.data) {
-        const newProject: Project = { 
-          ...projectRes.data, 
-          id: String(projectRes.data.id), 
-          tasks: [] 
-        };
-
-        // 3. Actualizar el estado de React en un SOLO paso para evitar re-renders múltiples
-        setProjects(prev => [newProject, ...prev]);
-        setIdeas(prev => prev.filter(i => i.id !== idea.id));
-        setActiveTab('projects');
+      if (!projectRes.success || !projectRes.data) {
+        const errorMsg = typeof projectRes.error === 'string' ? projectRes.error : (projectRes.error?.message || 'Error al crear proyecto en Supabase');
+        alert(`Error en Supabase: ${errorMsg}`);
+        return;
       }
-    } catch (err) {
+
+      const newProject: Project = { 
+        ...projectRes.data, 
+        id: String(projectRes.data.id), 
+        tasks: [] 
+      };
+
+      setProjects(prev => [newProject, ...prev]);
+      setIdeas(prev => prev.filter(i => i.id !== idea.id));
+      setActiveTab('projects');
+      showToast("Idea convertida a proyecto en Supabase.");
+    } catch (err: any) {
       console.error("Error al convertir la idea:", err);
+      alert(`Error al convertir idea: ${err.message || err}`);
     }
   };
 
@@ -449,60 +435,63 @@ function App() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setIsAuthenticated(false);
+        alert("Debes estar autenticado en Supabase para guardar proyectos.");
         return;
       }
 
-      if (project.id && !String(project.id).startsWith('proj-')) {
-        // OPTIMISTIC UPDATE
+      // Check if project has an existing DB id (not a temp client prefix)
+      const isExistingInDb = project.id && 
+        !String(project.id).startsWith('proj-temp-') && 
+        !String(project.id).startsWith('proj-') &&
+        !String(project.id).startsWith('guest_');
+
+      if (isExistingInDb) {
+        const res = await updateCloudProject(project.id, {
+          title: project.title,
+          description: project.description,
+          status: project.status,
+          priority: project.priority,
+          progress: project.progress
+        });
+
+        if (!res.success || res.error) {
+          const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar proyecto en Supabase');
+          alert(`Error en Supabase: ${errorMsg}`);
+          return;
+        }
+
         setProjects(prev => prev.map(p => p.id === project.id ? project : p));
-
-        updateCloudProject(project.id, {
-          title: project.title,
-          description: project.description,
-          status: project.status,
-          priority: project.priority,
-          progress: project.progress
-        }).then(res => {
-          if (res.error) {
-            console.error('Error al actualizar proyecto (background):', res.error);
-          } else {
-            // Sincronizar tareas inmediatamente si es una actualización
-            syncProjectTasksToCloud(project);
-          }
-        });
+        await syncProjectTasksToCloud(project);
+        showToast("Proyecto actualizado en Supabase.");
       } else {
-        // OPTIMISTIC CREATION (with temporary ID)
-        const tempId = project.id || 'proj-temp-' + Date.now();
-        const tempProject = { ...project, id: tempId };
-        setProjects(prev => [tempProject, ...prev]);
-
-        createCloudProject({
+        const res = await createCloudProject({
           title: project.title,
           description: project.description,
           status: project.status,
           priority: project.priority,
           progress: project.progress
-        }).then(res => {
-          if (res.error) {
-            console.error('Error al guardar en Supabase (background):', res.error);
-            // Rollback if needed
-            setProjects(prev => prev.filter(p => p.id !== tempId));
-          } else if (res.data) {
-            const createdProj = {
-              ...tempProject,
-              id: String(res.data.id),
-              createdAt: res.data.created_at || new Date().toISOString()
-            };
-            setProjects(prev => prev.map(p => p.id === tempId ? createdProj : p));
-            
-            // Sincronizar tareas usando el ID real asignado por Supabase
-            syncProjectTasksToCloud(createdProj);
-          }
         });
+
+        if (!res.success || !res.data) {
+          const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al crear proyecto en Supabase');
+          alert(`Error en Supabase: ${errorMsg}`);
+          return;
+        }
+
+        const realId = String(res.data.id);
+        const createdProj = {
+          ...project,
+          id: realId,
+          createdAt: res.data.created_at || new Date().toISOString()
+        };
+
+        setProjects(prev => [createdProj, ...prev.filter(p => p.id !== project.id)]);
+        await syncProjectTasksToCloud(createdProj);
+        showToast("Proyecto creado en Supabase.");
       }
     } catch (err: any) {
       console.error('Error inesperado en handleSaveProject:', err);
+      alert(`Error en proyecto: ${err.message || err}`);
     }
   };
 
@@ -510,23 +499,28 @@ function App() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setIsAuthenticated(false);
+        alert("Debes estar autenticado en Supabase para eliminar proyectos.");
         return;
       }
 
-      // OPTIMISTIC DELETE
+      if (projectId === 'proj-other') {
+        setProjects(prev => prev.filter(p => p.id !== projectId));
+        return;
+      }
+
+      const res = await deleteCloudProject(projectId);
+      if (!res.success || res.error) {
+        const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al eliminar proyecto de Supabase');
+        console.error('Error al eliminar proyecto:', res.error);
+        alert(`Error en Supabase: ${errorMsg}`);
+        return;
+      }
+
       setProjects(prev => prev.filter(p => p.id !== projectId));
-
-      supabase.from('projects').delete().eq('id', projectId).eq('user_id', user.id).then(({ error }) => {
-        if (error) {
-           console.error('Error al eliminar proyecto (background):', error);
-        } else {
-           deleteCloudProject(projectId);
-        }
-      });
-
+      showToast("Proyecto eliminado de Supabase.");
     } catch (e: any) {
       console.error('Error al eliminar proyecto:', e);
+      alert(`Error al eliminar proyecto: ${e.message || e}`);
     }
   };
 
@@ -678,16 +672,17 @@ function App() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setIsAuthenticated(false);
+        alert("Debes estar autenticado en Supabase para guardar hábitos.");
         return;
       }
 
-      if (habitData.id) {
-        // UPDATE EXISTING HABIT
-        // OPTIMISTIC UPDATE
-        setHabits(prev => prev.map(h => h.id === habitData.id ? { ...h, ...habitData } as Habit : h));
+      const isExistingInDb = habitData.id &&
+        !String(habitData.id).startsWith('habit-temp-') &&
+        !String(habitData.id).startsWith('h') &&
+        !String(habitData.id).startsWith('guest_');
 
-        updateCloudHabit(habitData.id, {
+      if (isExistingInDb) {
+        const res = await updateCloudHabit(habitData.id!, {
           title: habitData.title,
           description: habitData.description,
           category: habitData.category,
@@ -695,73 +690,79 @@ function App() {
           icon: habitData.icon,
           frequency: habitData.targetDaysPerWeek,
           daysOfWeek: habitData.daysOfWeek
-        } as any).then(res => {
-          if (res.error) console.error('Error al actualizar hábito (background):', res.error);
-        });
+        } as any);
+
+        if (!res.success || res.error) {
+          const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar hábito en Supabase');
+          alert(`Error en Supabase: ${errorMsg}`);
+          return;
+        }
+
+        setHabits(prev => prev.map(h => h.id === habitData.id ? { ...h, ...habitData } as Habit : h));
+        showToast("Hábito actualizado en Supabase.");
       } else {
-        // CREATE NEW HABIT
-        const tempId = 'habit-temp-' + Date.now();
-        const newHabit: Habit = {
-          id: tempId,
+        const res = await createCloudHabit({
           title: habitData.title || 'Hábito sin título',
           description: habitData.description,
           category: habitData.category || 'Productividad',
           color: habitData.color || '#00F0FF',
           icon: habitData.icon || 'Zap',
-          targetDaysPerWeek: habitData.targetDaysPerWeek || 7,
-          createdAt: new Date().toISOString(),
-          archived: false,
-          completed: false,
-          streak: 0,
-          lastCompletedAt: null,
+          frequency: habitData.targetDaysPerWeek || 7,
           daysOfWeek: habitData.daysOfWeek || []
+        } as any);
+
+        if (!res.success || !res.data) {
+          const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al crear hábito en Supabase');
+          alert(`Error en Supabase: ${errorMsg}`);
+          return;
+        }
+
+        const createdHabit: Habit = {
+          id: String(res.data.id),
+          title: res.data.title || habitData.title || 'Hábito sin título',
+          description: res.data.description || habitData.description,
+          category: res.data.category || habitData.category || 'Productividad',
+          color: res.data.color || habitData.color || '#00F0FF',
+          icon: res.data.icon || habitData.icon || 'Zap',
+          targetDaysPerWeek: res.data.target_days || res.data.frequency || habitData.targetDaysPerWeek || 7,
+          createdAt: res.data.created_at || new Date().toISOString(),
+          archived: Boolean(res.data.archived),
+          completed: Boolean(res.data.completed),
+          streak: Number(res.data.streak || 0),
+          lastCompletedAt: res.data.last_completed_at || null,
+          daysOfWeek: res.data.days_of_week || habitData.daysOfWeek || []
         };
 
-        // OPTIMISTIC UPDATE
-        setHabits(prev => [newHabit, ...prev]);
-
-        createCloudHabit({
-          title: newHabit.title,
-          description: newHabit.description,
-          category: newHabit.category,
-          color: newHabit.color,
-          icon: newHabit.icon,
-          frequency: newHabit.targetDaysPerWeek,
-          daysOfWeek: newHabit.daysOfWeek
-        } as any).then(res => {
-          if (res.error) {
-            console.error('Error al crear hábito (background):', res.error);
-            // Rollback
-            setHabits(prev => prev.filter(h => h.id !== tempId));
-          } else if (res.data) {
-            const createdHabit: Habit = {
-              ...newHabit,
-              id: String(res.data.id),
-              createdAt: res.data.created_at || new Date().toISOString()
-            };
-            setHabits(prev => prev.map(h => h.id === tempId ? createdHabit : h));
-          }
-        });
+        setHabits(prev => [createdHabit, ...prev.filter(h => h.id !== habitData.id)]);
+        showToast("Hábito creado en Supabase.");
       }
     } catch (err: any) {
       console.error('Error al guardar hábito:', err);
+      alert(`Error al guardar hábito: ${err.message || err}`);
     }
   }, []);
-
 
   const handleDeleteHabit = useCallback(async (habitId: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setIsAuthenticated(false);
+        alert("Debes estar autenticado en Supabase para eliminar hábitos.");
         return;
       }
+
+      const res = await deleteCloudHabit(habitId);
+      if (!res.success || res.error) {
+        const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al eliminar hábito de Supabase');
+        console.error("Error al eliminar hábito:", res.error);
+        alert(`Error en Supabase: ${errorMsg}`);
+        return;
+      }
+
       setHabits(prev => prev.filter(h => h.id !== habitId));
-      supabase.from('habits').delete().eq('id', habitId).eq('user_id', user.id).then(({ error }) => {
-        if (error) console.error("Error al eliminar hábito (background):", error);
-      });
+      showToast("Hábito eliminado de Supabase.");
     } catch (e: any) {
       console.error("Error al eliminar hábito:", e);
+      alert(`Error al eliminar hábito: ${e.message || e}`);
     }
   }, []);
 
