@@ -156,9 +156,7 @@ export async function updateCloudTask(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { console.error("No hay usuario autenticado. Cancelando guardado de tarea."); return { success: false, error: "Usuario no autenticado" }; }
 
-    const updatePayload: Record<string, any> = {
-      updated_at: new Date().toISOString()
-    };
+    const updatePayload: Record<string, any> = {};
 
     if (updates.completed !== undefined) {
       updatePayload.completed = updates.completed;
@@ -198,10 +196,11 @@ export async function updateCloudTask(
       .update(updatePayload)
       .eq('id', taskId);
 
-    if (error && (error.message?.includes('is_exec') || error.message?.includes('is_my_day'))) {
+    if (error && (error.message?.includes('is_exec') || error.message?.includes('is_my_day') || error.message?.includes('updated_at'))) {
       const fallbackPayload = { ...updatePayload };
       delete fallbackPayload.is_exec;
       delete fallbackPayload.is_my_day;
+      delete fallbackPayload.updated_at;
       const retry = await supabase
         .from('tasks')
         .update(fallbackPayload)
