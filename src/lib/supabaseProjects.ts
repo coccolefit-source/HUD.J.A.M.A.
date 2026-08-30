@@ -89,9 +89,13 @@ export async function updateCloudProject(
 export async function fetchCloudProjects(userId?: string): Promise<Project[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    let query = supabase.from('projects').select('*');
-    if (userId) {
-      query = query.eq('user_id', userId);
+    const { data: { user } } = await supabase.auth.getUser();
+    const targetUserId = userId || user?.id;
+    if (!targetUserId) return [];
+
+    let query = supabase.from('projects').select('*, tasks(*)');
+    if (targetUserId) {
+      query = query.eq('user_id', targetUserId);
     }
     const { data, error } = await query;
 
@@ -110,8 +114,19 @@ export async function fetchCloudProjects(userId?: string): Promise<Project[]> {
       status: row.status || 'Planificación',
       priority: row.priority || 'Media',
       startDate: row.start_date || new Date().toISOString().split('T')[0],
+      targetDate: row.end_date || row.target_date || undefined,
       progress: typeof row.progress === 'number' ? row.progress : 0,
-      tasks: [],
+      tasks: (row.tasks || []).map((t: any) => ({
+        id: String(t.id),
+        title: t.title || 'Tarea sin título',
+        completed: Boolean(t.completed || t.status === 'completed'),
+        dueDate: t.due_date || t.date || undefined,
+        isExec: t.is_exec !== undefined ? Boolean(t.is_exec) : true,
+        isMyDay: Boolean(t.is_my_day),
+        description: t.description || '',
+        priority: t.priority || 'medium',
+        status: t.status || (t.completed ? 'completed' : 'pending')
+      })),
       createdAt: row.created_at || new Date().toISOString(),
       updatedAt: row.updated_at || new Date().toISOString()
     }));
@@ -130,10 +145,18 @@ export async function deleteCloudProject(projectId: string): Promise<{ success: 
       return { success: false, error: "Usuario no autenticado" }; 
     }
 
-    // 1. Delete associated tasks first to prevent FK or orphan issues
-    await supabase.from('tasks').delete().eq('project_id', projectId).eq('user_id', user.id);
+    // 1. Explicitly delete tasks associated with project in Supabase
+    const { error: tasksError } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('project_id', projectId)
+      .eq('user_id', user.id);
 
-    // 2. Delete project from Supabase
+    if (tasksError) {
+      console.error('Error al eliminar sub-tareas asociadas en Supabase:', tasksError);
+    }
+
+    // 2. Explicitly delete project in Supabase
     const { data, error } = await supabase
       .from('projects')
       .delete()

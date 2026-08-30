@@ -26,7 +26,6 @@ import {
   saveGuestDailyLogs,
   resetToSampleData 
 } from './utils/storage';
-import { INITIAL_PROJECTS } from './data/initialData';
 import { getStoredUserSession, saveStoredUserSession, getStoredUserProfile, saveStoredUserProfile } from './utils/userStorage';
 import { getRankInfo } from './utils/gamification';
 import { getTodayISO, parseISODate, formatDateToISO } from './utils/dateUtils';
@@ -222,11 +221,7 @@ function App() {
     // Explicitly overwrite logs, reviews, and projects so 0 XP and 0 streak are strictly enforced
     const cleanLogs = {};
     const cleanReviews: OneOnOneReview[] = [];
-    const cleanProjects: Project[] = (projects.length > 0 ? projects : INITIAL_PROJECTS).map(p => ({
-      ...p,
-      progress: 0,
-      tasks: (p.tasks || []).map(t => ({ ...t, completed: false }))
-    }));
+    const cleanProjects: Project[] = [];
 
     setLogs(cleanLogs);
     saveStoredLogs(cleanLogs);
@@ -1068,14 +1063,17 @@ function App() {
 
   // Supabase Realtime Subscription for tasks & projects
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !isAuthenticated) return;
 
+    let isMounted = true;
     let channel: any = null;
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
 
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user || !isMounted) return;
+
+      const uniqueChannelId = `tasks-projects-realtime-${user.id}-${Math.random().toString(36).substring(2, 9)}`;
       channel = supabase
-        .channel(`tasks-projects-realtime-${user.id}`)
+        .channel(uniqueChannelId)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` },
@@ -1096,6 +1094,7 @@ function App() {
     });
 
     return () => {
+      isMounted = false;
       if (channel) {
         supabase.removeChannel(channel);
       }
