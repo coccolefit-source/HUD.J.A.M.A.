@@ -256,41 +256,93 @@ export async function deleteCloudTask(taskId: string): Promise<{ success: boolea
 
 /**
  * Sincroniza proyectos/tareas hacia Supabase sin duplicar tareas existentes
+ * y elimina tareas removidas del proyecto en Supabase.
  */
-export async function syncProjectTasksToCloud(project: Project): Promise<void> {
-  if (!isSupabaseConfigured || String(project.id).startsWith('guest_')) return;
+export async function syncProjectTasksToCloud(project: Project): Promise<Project> {
+  if (!isSupabaseConfigured || String(project.id).startsWith('guest_')) return project;
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) return project;
+
+    const isVirtualProject = project.id === 'proj-other' || String(project.id).startsWith('proj-temp-') || String(project.id).startsWith('proj-');
+    const targetDbProjectId = isVirtualProject ? null : project.id;
+
+    // 1. Consultar IDs de tareas actuales en Supabase para este proyecto (o project_id IS NULL para proj-other)
+    let query = supabase.from('tasks').select('id').eq('user_id', user.id);
+    if (targetDbProjectId) {
+      query = query.eq('project_id', targetDbProjectId);
+    } else {
+      query = query.is('project_id', null);
+    }
+    const { data: dbExistingTasks } = await query;
+    const dbTaskIdsInCloud = new Set((dbExistingTasks || []).map((row: any) => String(row.id)));
+
+    const currentTaskIdsInClient = new Set<string>();
+    const updatedTasksList: ProjectTask[] = [];
 
     if (project.tasks && project.tasks.length > 0) {
       for (const t of project.tasks) {
         if (String(t.id).startsWith('guest_')) continue;
 
-        const isTempId = String(t.id).startsWith('pt-') || String(t.id).startsWith('temp-');
+        const isTempId = String(t.id).startsWith('pt-') || String(t.id).startsWith('temp-') || String(t.id).startsWith('proj-');
+
         if (isTempId) {
-          // Nueva tarea agregada: insertar en Supabase
+          // Nueva tarea agregada en cliente: insertar en Supabase
           const res = await createCloudTask({
             title: t.title,
+            description: t.description,
             completed: Boolean(t.completed),
             dueDate: t.dueDate,
-            projectId: project.id
+            priority: t.priority,
+            status: t.status,
+            isExec: t.isExec !== undefined ? t.isExec : true,
+            isMyDay: t.isMyDay,
+            projectId: targetDbProjectId || undefined
           });
+
           if (res.data && res.data.id) {
-            t.id = String(res.data.id);
+            const realTaskId = String(res.data.id);
+            currentTaskIdsInClient.add(realTaskId);
+            updatedTasksList.push({
+              ...t,
+              id: realTaskId
+            });
+          } else {
+            updatedTasksList.push(t);
           }
         } else {
-          // Tarea ya existente: actualizar en Supabase
-          await updateCloudTask(t.id, {
+          // Tarea ya existente con ID real: actualizar en Supabase
+          currentTaskIdsInClient.add(String(t.id));
+          await updateCloudTask(String(t.id), {
             title: t.title,
+            description: t.description,
             completed: Boolean(t.completed),
             dueDate: t.dueDate,
-            projectId: project.id
+            priority: t.priority,
+            status: t.status,
+            isExec: t.isExec,
+            isMyDay: t.isMyDay,
+            projectId: targetDbProjectId || undefined
           });
+          updatedTasksList.push(t);
         }
       }
     }
+
+    // 2. Identificar tareas que existían en Supabase para este proyecto pero ya no están en project.tasks -> Eliminar de Supabase
+    for (const cloudTaskId of dbTaskIdsInCloud) {
+      if (!currentTaskIdsInClient.has(cloudTaskId)) {
+        console.log(`Eliminando tarea removida de Supabase: ${cloudTaskId}`);
+        await deleteCloudTask(cloudTaskId);
+      }
+    }
+
+    return {
+      ...project,
+      tasks: updatedTasksList
+    };
   } catch (e) {
     console.error('Error al sincronizar proyecto con Supabase:', e);
+    return project;
   }
 }

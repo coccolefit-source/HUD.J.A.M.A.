@@ -439,6 +439,21 @@ function App() {
         return;
       }
 
+      // Check if virtual project container 'proj-other'
+      if (project.id === 'proj-other') {
+        const syncedProject = await syncProjectTasksToCloud(project);
+        setProjects(prev => {
+          const exists = prev.some(p => p.id === 'proj-other');
+          if (exists) {
+            return prev.map(p => p.id === 'proj-other' ? syncedProject : p);
+          } else {
+            return [...prev, syncedProject];
+          }
+        });
+        showToast("Tareas guardadas en Supabase.");
+        return;
+      }
+
       // Check if project has an existing DB id (not a temp client prefix)
       const isExistingInDb = project.id && 
         !String(project.id).startsWith('proj-temp-') && 
@@ -460,8 +475,8 @@ function App() {
           return;
         }
 
-        setProjects(prev => prev.map(p => p.id === project.id ? project : p));
-        await syncProjectTasksToCloud(project);
+        const syncedProject = await syncProjectTasksToCloud(project);
+        setProjects(prev => prev.map(p => p.id === project.id ? syncedProject : p));
         showToast("Proyecto actualizado en Supabase.");
       } else {
         const res = await createCloudProject({
@@ -485,8 +500,8 @@ function App() {
           createdAt: res.data.created_at || new Date().toISOString()
         };
 
-        setProjects(prev => [createdProj, ...prev.filter(p => p.id !== project.id)]);
-        await syncProjectTasksToCloud(createdProj);
+        const syncedProject = await syncProjectTasksToCloud(createdProj);
+        setProjects(prev => [syncedProject, ...prev.filter(p => p.id !== project.id)]);
         showToast("Proyecto creado en Supabase.");
       }
     } catch (err: any) {
@@ -923,12 +938,19 @@ function App() {
 
       // Track tasks assigned to loaded projects
       const assignedTaskIds = new Set<string>();
-      const loadedProjects: Project[] = (projectsRes.data || []).map((r: any) => {
+      const loadedProjects: Project[] = [];
+
+      for (const r of (projectsRes.data || [])) {
+        // Skip duplicate 'Sin Proyecto / Otros' rows created in DB by old bugs
+        if (r.title === 'Sin Proyecto / Otros' || r.title === 'Otros') {
+          continue;
+        }
+
         const pIdStr = String(r.id);
         const projectTasks = allTasks.filter((t) => t.projectId === pIdStr);
         projectTasks.forEach(t => assignedTaskIds.add(t.id));
 
-        return {
+        loadedProjects.push({
           id: pIdStr,
           title: r.title || 'Proyecto sin título',
           description: r.description || '',
@@ -936,7 +958,7 @@ function App() {
           priority: r.priority || 'Media',
           progress: typeof r.progress === 'number' ? r.progress : 0,
           startDate: r.start_date || todayISO,
-          endDate: r.end_date || undefined,
+          targetDate: r.end_date || r.target_date || undefined,
           tasks: projectTasks.map(t => ({ 
             id: t.id, 
             title: t.title, 
@@ -949,55 +971,35 @@ function App() {
             status: t.status
           })),
           createdAt: r.created_at || new Date().toISOString()
-        };
-      });
+        });
+      }
 
       // Gather any unassigned tasks (e.g., project_id null or proj-other)
       const unassignedTasks = allTasks.filter(t => !assignedTaskIds.has(t.id));
 
-      let otherProject = loadedProjects.find(p => p.id === 'proj-other' || p.title === 'Sin Proyecto / Otros' || p.title === 'Otros');
-      if (unassignedTasks.length > 0 || !otherProject) {
-        if (otherProject) {
-          const existingIds = new Set(otherProject.tasks.map(t => t.id));
-          unassignedTasks.forEach(t => {
-            if (!existingIds.has(t.id)) {
-              otherProject!.tasks.push({ 
-                id: t.id, 
-                title: t.title, 
-                completed: t.completed, 
-                dueDate: t.dueDate,
-                isExec: t.isExec,
-                isMyDay: t.isMyDay,
-                description: t.description,
-                priority: t.priority,
-                status: t.status
-              });
-            }
-          });
-        } else {
-          otherProject = {
-            id: 'proj-other',
-            title: 'Sin Proyecto / Otros',
-            description: 'Contenedor de tareas independientes y sueltas',
-            status: 'En Progreso',
-            priority: 'Media',
-            startDate: todayISO,
-            progress: 0,
-            tasks: unassignedTasks.map(t => ({ 
-              id: t.id, 
-              title: t.title, 
-              completed: t.completed, 
-              dueDate: t.dueDate,
-              isExec: t.isExec,
-              isMyDay: t.isMyDay,
-              description: t.description,
-              priority: t.priority,
-              status: t.status
-            })),
-            createdAt: new Date().toISOString()
-          };
-          loadedProjects.push(otherProject);
-        }
+      if (unassignedTasks.length > 0) {
+        const otherProject: Project = {
+          id: 'proj-other',
+          title: 'Sin Proyecto / Otros',
+          description: 'Contenedor de tareas independientes y sueltas',
+          status: 'En Progreso',
+          priority: 'Media',
+          startDate: todayISO,
+          progress: 0,
+          tasks: unassignedTasks.map(t => ({ 
+            id: t.id, 
+            title: t.title, 
+            completed: t.completed, 
+            dueDate: t.dueDate,
+            isExec: t.isExec,
+            isMyDay: t.isMyDay,
+            description: t.description,
+            priority: t.priority,
+            status: t.status
+          })),
+          createdAt: new Date().toISOString()
+        };
+        loadedProjects.push(otherProject);
       }
 
       setProjects(loadedProjects);
