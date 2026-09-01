@@ -73,6 +73,7 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
   const longPressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const dragActiveRef = useRef<boolean>(false);
   const startXRef = useRef<number>(0);
@@ -131,7 +132,7 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>, index: number) => {
-    if (!dragActiveRef.current) {
+    if (!dragActiveRef.current || !draggingId) {
       const distance = Math.sqrt(
         Math.pow(e.clientX - startXRef.current, 2) + 
         Math.pow(e.clientY - startYRef.current, 2)
@@ -147,10 +148,38 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
 
     e.preventDefault();
 
-    const hoveredElement = document.elementFromPoint(e.clientX, e.clientY);
-    const cardElement = hoveredElement?.closest('[data-habit-id]');
-    if (cardElement) {
-      const targetHabitId = cardElement.getAttribute('data-habit-id');
+    const container = listContainerRef.current;
+    if (!container) return;
+
+    // Get all rendered habit element nodes
+    const children = Array.from(container.children) as HTMLElement[];
+    if (children.length <= 1) return;
+
+    const pointerY = e.clientY;
+    
+    // Find the closest index based on Y distance
+    let targetIndex = -1;
+    let minDistance = Infinity;
+
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      const childId = child.getAttribute('data-habit-id');
+      if (!childId) continue;
+
+      const rect = child.getBoundingClientRect();
+      const centerY = rect.top + rect.height / 2;
+      const distance = Math.abs(pointerY - centerY);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        targetIndex = i;
+      }
+    }
+
+    if (targetIndex !== -1) {
+      const targetChild = children[targetIndex];
+      const targetHabitId = targetChild.getAttribute('data-habit-id');
+
       if (targetHabitId && targetHabitId !== draggingId) {
         setLocalHabits(prev => {
           const fromIdx = prev.findIndex(h => h.id === draggingId);
@@ -560,7 +589,7 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
       </div>
 
       {/* Habit List Grid */}
-      <div className="space-y-3">
+      <div className="space-y-3" ref={listContainerRef}>
         <AnimatePresence mode="popLayout">
           {(filteredHabits || []).length > 0 ? (
             (filteredHabits || []).map((habit) => {
