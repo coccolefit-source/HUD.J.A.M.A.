@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { motion } from 'motion/react';
-import { Check, Flame, MoreVertical, Edit3, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Check, Flame, MoreVertical, Edit3, Trash2, ChevronUp, ChevronDown, GripVertical } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Habit } from '../../types';
 import { IconRenderer } from '../IconRenderer';
@@ -134,6 +134,11 @@ export const HabitCard = React.memo(({
       <div className="flex items-center justify-between gap-3">
         {/* Left icon + text info */}
         <div className="flex items-center gap-3.5 flex-1 min-w-0">
+          {/* Touch-friendly Drag Handle */}
+          <div className="drag-handle p-1.5 -ml-1 text-slate-500 hover:text-[#00F0FF] active:text-[#00F0FF] cursor-grab active:cursor-grabbing transition-colors shrink-0" title="Arrastrar para reordenar">
+            <GripVertical className="w-4 h-4" />
+          </div>
+
           <div
             className={`p-3 rounded-xl border transition-colors shrink-0 ${
               isCompleted

@@ -18,17 +18,31 @@ export interface HabitCloudPayload {
 export async function fetchCloudHabits(userId?: string): Promise<Habit[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    let query = supabase.from('habits').select('*');
-    if (userId) {
-      query = query.eq('user_id', userId);
+    const { data: { user } } = await supabase.auth.getUser();
+    const targetUserId = userId || user?.id;
+    if (!targetUserId) return [];
+
+    let query = supabase.from('habits').select('*').eq('user_id', targetUserId);
+    const orderedQuery = query.order('order', { ascending: true });
+    let { data, error } = await orderedQuery;
+    
+    if (error) {
+      console.warn("Fallo al ordenar por 'order' en Supabase, reintentando consulta simple:", error);
+      const simpleQuery = supabase.from('habits').select('*').eq('user_id', targetUserId);
+      const simpleRes = await simpleQuery;
+      data = simpleRes.data;
+      error = simpleRes.error;
     }
-    const { data, error } = await query;
+
     if (error) {
       console.error('Error al cargar hábitos desde Supabase:', error);
       return [];
     }
     if (!data) return [];
-    return data.map(row => ({
+
+    const hasDbOrder = data.some((r: any) => r.order !== null && r.order !== undefined);
+
+    const loadedHabits = data.map(row => ({
       id: String(row.id),
       title: row.title || 'Hábito sin título',
       description: row.description || '',
@@ -41,8 +55,39 @@ export async function fetchCloudHabits(userId?: string): Promise<Habit[]> {
       streak: Number(row.streak || 0),
       lastCompletedAt: row.last_completed_at || null,
       archived: Boolean(row.archived),
-      daysOfWeek: row.days_of_week || []
+      daysOfWeek: row.days_of_week || [],
+      order: row.order !== undefined ? row.order : null
     }));
+
+    if (hasDbOrder) {
+      loadedHabits.sort((a, b) => {
+        const valA = (a as any).order;
+        const valB = (b as any).order;
+        if (valA === null || valA === undefined) return 1;
+        if (valB === null || valB === undefined) return -1;
+        return valA - valB;
+      });
+    } else {
+      const localKey = `habits_order_${targetUserId}`;
+      const storedOrderStr = localStorage.getItem(localKey);
+      if (storedOrderStr) {
+        try {
+          const storedOrder: string[] = JSON.parse(storedOrderStr);
+          loadedHabits.sort((a, b) => {
+            const idxA = storedOrder.indexOf(a.id);
+            const idxB = storedOrder.indexOf(b.id);
+            if (idxA === -1 && idxB === -1) return 0;
+            if (idxA === -1) return 1;
+            if (idxB === -1) return -1;
+            return idxA - idxB;
+          });
+        } catch (e) {
+          console.error("Error al parsear orden de hábitos de localStorage:", e);
+        }
+      }
+    }
+
+    return loadedHabits;
   } catch (err) {
     console.error('Error al consultar hábitos de Supabase:', err);
     return [];

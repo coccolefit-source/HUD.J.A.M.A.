@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { 
@@ -37,6 +37,7 @@ interface DailyTrackerProps {
   onSaveHabit: (habitData: Partial<Habit>) => void;
   onDeleteHabit: (habitId: string) => void;
   onMoveHabit?: (habitId: string, direction: 'up' | 'down') => void;
+  onReorderHabits?: (newHabits: Habit[]) => void;
   onCloseDay: (dateStr: string) => void;
   onSaveDailyWins?: (dateStr: string, wins: string[]) => void;
   onSaveSportsEntry?: (dateStr: string, entry: SportsEntry) => void;
@@ -55,6 +56,7 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   onSaveHabit,
   onDeleteHabit,
   onMoveHabit,
+  onReorderHabits,
   onCloseDay,
   onSaveDailyWins,
   onSaveSportsEntry,
@@ -65,6 +67,130 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'Todos' | CategoryType>('Todos');
+
+  // Local state for dragging habits
+  const [localHabits, setLocalHabits] = useState<Habit[]>(habits);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  const longPressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const dragActiveRef = useRef<boolean>(false);
+  const startXRef = useRef<number>(0);
+  const startYRef = useRef<number>(0);
+  const currentDragIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setLocalHabits(habits);
+  }, [habits]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>, habitId: string, index: number) => {
+    // Exclude button and dropdown clicks
+    if (
+      (e.target as HTMLElement).closest('button') || 
+      (e.target as HTMLElement).closest('a') || 
+      (e.target as HTMLElement).closest('.dropdown-menu') ||
+      (e.target as HTMLElement).closest('[role="button"]')
+    ) {
+      return;
+    }
+
+    const pointerId = e.pointerId;
+    const currentTarget = e.currentTarget;
+
+    startXRef.current = e.clientX;
+    startYRef.current = e.clientY;
+
+    const isGrip = (e.target as HTMLElement).closest('.drag-handle');
+
+    const startDrag = () => {
+      dragActiveRef.current = true;
+      currentDragIdRef.current = habitId;
+      setDraggingId(habitId);
+      setDraggedIndex(index);
+
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+
+      try {
+        currentTarget.setPointerCapture(pointerId);
+      } catch (err) {
+        console.warn("Could not capture pointer:", err);
+      }
+    };
+
+    if (isGrip) {
+      // Immediate drag for handle
+      startDrag();
+    } else {
+      // Long press drag for card (300ms)
+      longPressTimeoutRef.current = setTimeout(() => {
+        startDrag();
+      }, 300);
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>, index: number) => {
+    if (!dragActiveRef.current) {
+      const distance = Math.sqrt(
+        Math.pow(e.clientX - startXRef.current, 2) + 
+        Math.pow(e.clientY - startYRef.current, 2)
+      );
+      if (distance > 8) { // Cancel long-press timeout on significant drift
+        if (longPressTimeoutRef.current) {
+          clearTimeout(longPressTimeoutRef.current);
+          longPressTimeoutRef.current = null;
+        }
+      }
+      return;
+    }
+
+    e.preventDefault();
+
+    const hoveredElement = document.elementFromPoint(e.clientX, e.clientY);
+    const cardElement = hoveredElement?.closest('[data-habit-id]');
+    if (cardElement) {
+      const targetHabitId = cardElement.getAttribute('data-habit-id');
+      if (targetHabitId && targetHabitId !== draggingId) {
+        setLocalHabits(prev => {
+          const fromIdx = prev.findIndex(h => h.id === draggingId);
+          const toIdx = prev.findIndex(h => h.id === targetHabitId);
+          if (fromIdx === -1 || toIdx === -1) return prev;
+
+          const updated = [...prev];
+          const [moved] = updated.splice(fromIdx, 1);
+          updated.splice(toIdx, 0, moved);
+          return updated;
+        });
+      }
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+
+    if (dragActiveRef.current) {
+      dragActiveRef.current = false;
+      const finalDragId = currentDragIdRef.current;
+      setDraggingId(null);
+      setDraggedIndex(null);
+      currentDragIdRef.current = null;
+
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch (err) {
+        // Safe fallback
+      }
+
+      // Persist the new order
+      if (onReorderHabits) {
+        onReorderHabits(localHabits);
+      }
+    }
+  };
 
   // Filter tasks from projects that are scheduled for the selected date or marked for My Day
   const execTodayTasks = useMemo(() => {
@@ -192,7 +318,7 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   };
 
   const completedIds = activeLog.completedHabitIds || [];
-  const activeHabits = useMemo(() => habits.filter(h => !h.archived), [habits]);
+  const activeHabits = useMemo(() => localHabits.filter(h => !h.archived), [localHabits]);
 
   // Sports totals calculation
   const totalKmToday = (activeLog?.sportsEntries || []).reduce((sum, e) => sum + (e.km || 0), 0) || 0;
@@ -440,24 +566,41 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
             (filteredHabits || []).map((habit) => {
               const isCompleted = completedIds.includes(habit.id);
               const streak = calculateStreak(habit.id, selectedDate);
-              const idxInHabits = habits.findIndex(h => h.id === habit.id);
+              const idxInHabits = localHabits.findIndex(h => h.id === habit.id);
               const canMoveUp = idxInHabits > 0;
-              const canMoveDown = idxInHabits !== -1 && idxInHabits < habits.length - 1;
+              const canMoveDown = idxInHabits !== -1 && idxInHabits < localHabits.length - 1;
+              const isDragging = draggingId === habit.id;
 
               return (
-                <HabitCard
+                <div
                   key={habit.id}
-                  habit={habit}
-                  isCompleted={isCompleted}
-                  streakCount={streak}
-                  onToggle={(hId) => onToggleHabit(selectedDate, hId)}
-                  onEdit={openEdit}
-                  onDelete={onDeleteHabit}
-                  onMoveUp={onMoveHabit ? () => onMoveHabit(habit.id, 'up') : undefined}
-                  onMoveDown={onMoveHabit ? () => onMoveHabit(habit.id, 'down') : undefined}
-                  canMoveUp={canMoveUp}
-                  canMoveDown={canMoveDown}
-                />
+                  data-habit-id={habit.id}
+                  onPointerDown={(e) => handlePointerDown(e, habit.id, idxInHabits)}
+                  onPointerMove={(e) => handlePointerMove(e, idxInHabits)}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                  className={`transition-all duration-150 ${
+                    isDragging
+                      ? 'scale-[1.03] z-50 opacity-90 shadow-[0_10px_30px_rgba(0,240,255,0.3)] ring-2 ring-[#00F0FF]'
+                      : ''
+                  }`}
+                  style={{
+                    touchAction: draggingId ? 'none' : 'auto'
+                  }}
+                >
+                  <HabitCard
+                    habit={habit}
+                    isCompleted={isCompleted}
+                    streakCount={streak}
+                    onToggle={(hId) => onToggleHabit(selectedDate, hId)}
+                    onEdit={openEdit}
+                    onDelete={onDeleteHabit}
+                    onMoveUp={onMoveHabit ? () => onMoveHabit(habit.id, 'up') : undefined}
+                    onMoveDown={onMoveHabit ? () => onMoveHabit(habit.id, 'down') : undefined}
+                    canMoveUp={canMoveUp}
+                    canMoveDown={canMoveDown}
+                  />
+                </div>
               );
             })
           ) : (

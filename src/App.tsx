@@ -662,7 +662,8 @@ function App() {
     }
   }, []);
 
-  const handleMoveHabit = useCallback((habitId: string, direction: 'up' | 'down') => {
+  const handleMoveHabit = useCallback(async (habitId: string, direction: 'up' | 'down') => {
+    let finalHabits: Habit[] = [];
     setHabits(prev => {
       const idx = prev.findIndex(h => h.id === habitId);
       if (idx === -1) return prev;
@@ -674,8 +675,64 @@ function App() {
       const [moved] = newHabits.splice(idx, 1);
       newHabits.splice(targetIdx, 0, moved);
 
+      finalHabits = newHabits;
       return newHabits;
     });
+
+    if (finalHabits.length > 0) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const localKey = `habits_order_${user.id}`;
+          const orderMap = finalHabits.map(h => h.id);
+          localStorage.setItem(localKey, JSON.stringify(orderMap));
+
+          const updatePromises = finalHabits.map((h, index) => {
+            return supabase
+              .from('habits')
+              .update({ order: index })
+              .eq('id', h.id)
+              .eq('user_id', user.id);
+          });
+
+          const results = await Promise.all(updatePromises);
+          const failed = results.find(r => r.error);
+          if (failed) {
+            console.warn("Fallo al persistir orden en Supabase, utilizando local storage fallback:", failed.error);
+          }
+        }
+      } catch (err) {
+        console.error("Error al persistir orden de hábitos:", err);
+      }
+    }
+  }, []);
+
+  const handleReorderHabits = useCallback(async (newHabitsList: Habit[]) => {
+    setHabits(newHabitsList);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const localKey = `habits_order_${user.id}`;
+        const orderMap = newHabitsList.map(h => h.id);
+        localStorage.setItem(localKey, JSON.stringify(orderMap));
+
+        const updatePromises = newHabitsList.map((h, index) => {
+          return supabase
+            .from('habits')
+            .update({ order: index })
+            .eq('id', h.id)
+            .eq('user_id', user.id);
+        });
+
+        const results = await Promise.all(updatePromises);
+        const failed = results.find(r => r.error);
+        if (failed) {
+          console.warn("Fallo al persistir reordenamiento en Supabase, utilizando local storage fallback:", failed.error);
+        }
+      }
+    } catch (err) {
+      console.error("Error al persistir reordenamiento de hábitos:", err);
+    }
   }, []);
 
   const handleSaveHabit = useCallback(async (habitData: Partial<Habit>) => {
@@ -865,8 +922,17 @@ function App() {
   const loadAllUserData = useCallback(async (userId: string) => {
     if (!isSupabaseConfigured || !userId) return;
     try {
+      const fetchHabitsWithFallback = async () => {
+        const res = await supabase.from('habits').select('*').eq('user_id', userId).order('order', { ascending: true });
+        if (res.error) {
+          console.warn("Fallo al ordenar por 'order' en Supabase, reintentando consulta simple:", res.error);
+          return supabase.from('habits').select('*').eq('user_id', userId);
+        }
+        return res;
+      };
+
       const [habitsRes, tasksRes, projectsRes, ideasRes, dailyLogsData] = await Promise.all([
-        supabase.from('habits').select('*').eq('user_id', userId),
+        fetchHabitsWithFallback(),
         supabase.from('tasks').select('*').eq('user_id', userId),
         supabase.from('projects').select('*').eq('user_id', userId),
         supabase.from('ideas').select('*').eq('user_id', userId),
@@ -874,14 +940,45 @@ function App() {
       ]);
 
       if (habitsRes.data) {
+        const hasDbOrder = habitsRes.data.some((r: any) => r.order !== null && r.order !== undefined);
+
         let loadedHabits = habitsRes.data.map((r: any) => ({
           id: String(r.id), title: r.title, description: r.description,
           category: r.category, color: r.color, icon: r.icon,
           targetDaysPerWeek: r.target_days || r.frequency || 7,
           createdAt: r.created_at, completed: Boolean(r.completed),
           streak: Number(r.streak), lastCompletedAt: r.last_completed_at, archived: Boolean(r.archived),
-          daysOfWeek: r.days_of_week || []
+          daysOfWeek: r.days_of_week || [],
+          order: r.order !== undefined ? r.order : null
         }));
+
+        if (hasDbOrder) {
+          loadedHabits.sort((a: any, b: any) => {
+            const valA = a.order;
+            const valB = b.order;
+            if (valA === null || valA === undefined) return 1;
+            if (valB === null || valB === undefined) return -1;
+            return valA - valB;
+          });
+        } else {
+          const localKey = `habits_order_${userId}`;
+          const storedOrderStr = localStorage.getItem(localKey);
+          if (storedOrderStr) {
+            try {
+              const storedOrder: string[] = JSON.parse(storedOrderStr);
+              loadedHabits.sort((a: any, b: any) => {
+                const idxA = storedOrder.indexOf(a.id);
+                const idxB = storedOrder.indexOf(b.id);
+                if (idxA === -1 && idxB === -1) return 0;
+                if (idxA === -1) return 1;
+                if (idxB === -1) return -1;
+                return idxA - idxB;
+              });
+            } catch (e) {
+              console.error("Error al parsear orden de hábitos de localStorage:", e);
+            }
+          }
+        }
 
         setHabits(loadedHabits);
       }
@@ -1284,7 +1381,7 @@ function App() {
            </div>
          </header>
 
-         {activeTab === 'tracker' && <DailyTracker habits={habits} logs={logs} projects={projects} onSaveProject={handleSaveProject} onToggleHabit={handleToggleHabit} onSaveHabit={handleSaveHabit} onDeleteHabit={handleDeleteHabit} onCloseDay={handleCloseDay} onSaveDailyWins={handleSaveDailyWins} onSaveSportsEntry={handleSaveSportsEntry} onDeleteSportsEntry={handleDeleteSportsEntry} onMoveHabit={handleMoveHabit} calculateStreak={calculateStreak} />}
+         {activeTab === 'tracker' && <DailyTracker habits={habits} logs={logs} projects={projects} onSaveProject={handleSaveProject} onToggleHabit={handleToggleHabit} onSaveHabit={handleSaveHabit} onDeleteHabit={handleDeleteHabit} onCloseDay={handleCloseDay} onSaveDailyWins={handleSaveDailyWins} onSaveSportsEntry={handleSaveSportsEntry} onDeleteSportsEntry={handleDeleteSportsEntry} onMoveHabit={handleMoveHabit} onReorderHabits={handleReorderHabits} calculateStreak={calculateStreak} />}
          {activeTab === 'exec' && <ExecCenter projects={projects} onSaveProject={handleSaveProject} onUpdateProjects={setProjects} />}
          {activeTab === 'projects' && <ProjectsManager projects={projects} onSaveProject={handleSaveProject} onDeleteProject={handleDeleteProject} />}
          {activeTab === 'analytics' && <AnalyticsTrends habits={habits} logs={logs} calculateStreak={calculateStreak} />}
