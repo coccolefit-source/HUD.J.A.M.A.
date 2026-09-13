@@ -271,7 +271,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
 
     const res = await deleteCloudTask(taskId);
 
-    if (res.success) {
+    if (res.success && !res.error) {
       const updatedTasks = project.tasks.filter(t => t.id !== taskId);
       const completedCount = updatedTasks.filter(t => t.completed).length;
       const newProgress = updatedTasks.length > 0 
@@ -287,8 +287,10 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
 
       onSaveProject(updatedProject);
     } else {
-      const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al eliminar tarea de Supabase');
-      console.error('Error en Supabase:', res.error);
+      const errorMsg = typeof res.error === 'string' 
+        ? res.error 
+        : (res.error?.message || res.error?.details || 'Error al eliminar tarea de Supabase');
+      console.error('Error al eliminar tarea en Supabase:', res.error);
       alert(`Error en Supabase: ${errorMsg}`);
     }
   };
@@ -865,7 +867,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
                     <button
                       type="button"
                       onClick={() => handleDeleteTask(project.id, task.id)}
-                      className="p-1.5 text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                      className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors opacity-70 hover:opacity-100 cursor-pointer"
                       title="Eliminar tarea"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

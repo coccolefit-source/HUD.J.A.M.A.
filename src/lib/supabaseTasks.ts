@@ -25,11 +25,14 @@ export async function fetchCloudTasks(userId?: string): Promise<{ task: ProjectT
   }
 
   try {
-    let query = supabase.from('tasks').select('*');
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-    const { data, error } = await query;
+    const { data: { user } } = await supabase.auth.getUser();
+    const targetUserId = userId || user?.id;
+    if (!targetUserId) return [];
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', targetUserId);
 
     if (error) {
       console.error('Error al cargar tareas desde Supabase:', error);
@@ -224,27 +227,29 @@ export async function updateCloudTask(
 /**
  * 4. Eliminar tarea en Supabase
  */
-export async function deleteCloudTask(taskId: string): Promise<{ success: boolean; error?: any }> {
+export async function deleteCloudTask(taskId: string): Promise<{ success: boolean; data?: any; error?: any }> {
   if (!isSupabaseConfigured || String(taskId).startsWith('guest_')) {
     return { success: true };
   }
 
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { console.error("No hay usuario autenticado. Cancelando guardado de tarea."); return { success: false, error: "Usuario no autenticado" }; }
+    if (!user) {
+      console.error("No hay usuario autenticado. Cancelando eliminación de tarea.");
+      return { success: false, error: "Usuario no autenticado" };
+    }
 
     const { data, error } = await supabase
       .from('tasks')
       .delete()
-      .eq('id', taskId)
-      .eq('user_id', user.id);
+      .eq('id', taskId);
 
     if (error) {
-      console.error('Error al eliminar tarea:', error);
+      console.error('Error al eliminar tarea de Supabase:', error);
       return { success: false, error };
     }
 
-    return { success: true };
+    return { success: true, data };
   } catch (err: any) {
     console.error('Error al eliminar tarea de Supabase:', err);
     return { success: false, error: err };

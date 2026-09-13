@@ -546,7 +546,9 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       ) : (
         <div className="p-8 text-center bg-[#101827]/60 border border-dashed border-slate-800 rounded-2xl font-mono text-slate-500 space-y-3">
           <FolderKanban className="w-10 h-10 mx-auto text-slate-600" />
-          <p className="text-xs">No se encontraron proyectos con los filtros aplicados.</p>
+          <p className="text-xs font-bold text-slate-400">
+            {projects.length === 0 ? "No hay proyectos activos" : "No se encontraron proyectos con los filtros aplicados."}
+          </p>
           <button
             type="button"
             onClick={handleOpenAddModal}

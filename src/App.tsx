@@ -513,16 +513,13 @@ function App() {
         return;
       }
 
-      if (projectId === 'proj-other') {
-        setProjects(prev => prev.filter(p => p.id !== projectId));
-        return;
-      }
-
       const res = await deleteCloudProject(projectId);
       if (!res.success || res.error) {
-        const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al eliminar proyecto de Supabase');
-        console.error('Error al eliminar proyecto:', res.error);
-        alert(`Error en Supabase: ${errorMsg}`);
+        const errorMsg = typeof res.error === 'string' 
+          ? res.error 
+          : (res.error?.message || res.error?.details || res.error?.hint || 'Error al eliminar proyecto de Supabase');
+        console.error('Error al eliminar proyecto en Supabase:', res.error);
+        alert(`Error al eliminar en Supabase: ${errorMsg}`);
         return;
       }
 
@@ -998,7 +995,7 @@ function App() {
         priority?: string;
         status?: string;
       }> = [];
-      
+
       for (const t of (tasksRes.data || [])) {
         const tId = String(t.id);
         const pId = (t.project_id && t.project_id !== 'null') ? String(t.project_id) : 'proj-other';

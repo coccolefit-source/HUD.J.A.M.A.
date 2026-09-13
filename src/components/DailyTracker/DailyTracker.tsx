@@ -67,7 +67,6 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'Todos' | CategoryType>('Todos');
-
   // Local state for dragging habits
   const [localHabits, setLocalHabits] = useState<Habit[]>(habits);
   const [draggingId, setDraggingId] = useState<string | null>(null);

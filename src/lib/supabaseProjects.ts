@@ -137,7 +137,7 @@ export async function fetchCloudProjects(userId?: string): Promise<Project[]> {
 }
 
 export async function deleteCloudProject(projectId: string): Promise<{ success: boolean; data?: any; error?: any }> {
-  if (!isSupabaseConfigured || String(projectId).startsWith('guest_') || projectId === 'proj-other') return { success: true };
+  if (!isSupabaseConfigured || String(projectId).startsWith('guest_')) return { success: true };
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { 
@@ -145,23 +145,36 @@ export async function deleteCloudProject(projectId: string): Promise<{ success: 
       return { success: false, error: "Usuario no autenticado" }; 
     }
 
+    if (projectId === 'proj-other') {
+      const { error: tasksError } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('user_id', user.id)
+        .is('project_id', null);
+
+      if (tasksError) {
+        console.error('Error al eliminar tareas sin proyecto en Supabase:', tasksError);
+        return { success: false, error: tasksError };
+      }
+      return { success: true };
+    }
+
     // 1. Explicitly delete tasks associated with project in Supabase
     const { error: tasksError } = await supabase
       .from('tasks')
       .delete()
-      .eq('project_id', projectId)
-      .eq('user_id', user.id);
+      .eq('project_id', projectId);
 
     if (tasksError) {
       console.error('Error al eliminar sub-tareas asociadas en Supabase:', tasksError);
+      return { success: false, error: tasksError };
     }
 
     // 2. Explicitly delete project in Supabase
     const { data, error } = await supabase
       .from('projects')
       .delete()
-      .eq('id', projectId)
-      .eq('user_id', user.id);
+      .eq('id', projectId);
 
     if (error) {
       console.error('Error al eliminar proyecto de Supabase:', error);
