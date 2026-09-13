@@ -1030,11 +1030,6 @@ function App() {
       const loadedProjects: Project[] = [];
 
       for (const r of (projectsRes.data || [])) {
-        // Skip duplicate 'Sin Proyecto / Otros' rows created in DB by old bugs
-        if (r.title === 'Sin Proyecto / Otros' || r.title === 'Otros') {
-          continue;
-        }
-
         const pIdStr = String(r.id);
         const projectTasks = allTasks.filter((t) => t.projectId === pIdStr);
         projectTasks.forEach(t => assignedTaskIds.add(t.id));
@@ -1061,34 +1056,6 @@ function App() {
           })),
           createdAt: r.created_at || new Date().toISOString()
         });
-      }
-
-      // Gather any unassigned tasks (e.g., project_id null or proj-other)
-      const unassignedTasks = allTasks.filter(t => !assignedTaskIds.has(t.id));
-
-      if (unassignedTasks.length > 0) {
-        const otherProject: Project = {
-          id: 'proj-other',
-          title: 'Sin Proyecto / Otros',
-          description: 'Contenedor de tareas independientes y sueltas',
-          status: 'En Progreso',
-          priority: 'Media',
-          startDate: todayISO,
-          progress: 0,
-          tasks: unassignedTasks.map(t => ({ 
-            id: t.id, 
-            title: t.title, 
-            completed: t.completed, 
-            dueDate: t.dueDate,
-            isExec: t.isExec,
-            isMyDay: t.isMyDay,
-            description: t.description,
-            priority: t.priority,
-            status: t.status
-          })),
-          createdAt: new Date().toISOString()
-        };
-        loadedProjects.push(otherProject);
       }
 
       setProjects(loadedProjects);

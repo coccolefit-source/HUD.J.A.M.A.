@@ -146,16 +146,34 @@ export async function deleteCloudProject(projectId: string): Promise<{ success: 
     }
 
     if (projectId === 'proj-other') {
-      const { error: tasksError } = await supabase
+      const { error: tasksError1 } = await supabase
         .from('tasks')
         .delete()
         .eq('user_id', user.id)
         .is('project_id', null);
 
-      if (tasksError) {
-        console.error('Error al eliminar tareas sin proyecto en Supabase:', tasksError);
-        return { success: false, error: tasksError };
+      if (tasksError1) {
+        console.error('Error al eliminar tareas sin proyecto en Supabase:', tasksError1);
+        return { success: false, error: tasksError1 };
       }
+
+      const { error: tasksError2 } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('project_id', 'proj-other');
+
+      if (tasksError2) {
+        console.error('Error al eliminar tareas de proj-other en Supabase:', tasksError2);
+        return { success: false, error: tasksError2 };
+      }
+
+      await supabase
+        .from('projects')
+        .delete()
+        .eq('user_id', user.id)
+        .or(`id.eq.proj-other,title.eq.Sin Proyecto / Otros,title.eq.Otros`);
+
       return { success: true };
     }
 
