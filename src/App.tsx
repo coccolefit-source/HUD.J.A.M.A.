@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Activity, User, Zap, X, RotateCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Habit, DailyLog, OneOnOneReview, SportsEntry, Project, ProjectTask, UserSession, UserProfileState, FocusSessionEntry, Idea } from './types';
+import { Habit, DailyLog, DailyProductivity, OneOnOneReview, SportsEntry, Project, ProjectTask, UserSession, UserProfileState, FocusSessionEntry, Idea } from './types';
 import { 
   getStoredHabits, 
   saveStoredHabits, 
@@ -38,17 +38,20 @@ import { ExecCenter } from './components/Exec/ExecCenter';
 import { FocusTimer } from './components/FocusTimer/FocusTimer';
 import { IdeasRadar } from './components/Ideas/IdeasRadar';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
+import { JarvisAssistantModal } from './components/JarvisAssistantModal';
+import { useWakeWord } from './lib/useWakeWord';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AuthModal } from './components/Auth/AuthModal';
 import { AuthBanner } from './components/Auth/AuthBanner';
 import { ResetPasswordModal } from './components/Auth/ResetPasswordModal';
-import { getStoredTheme, saveStoredTheme, ThemeId, THEMES } from './theme';
+import { getStoredTheme, saveStoredTheme, applyTheme, ThemeId, THEMES } from './theme';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { fetchCloudTasks, createCloudTask, updateCloudTask, deleteCloudTask, syncProjectTasksToCloud } from './lib/supabaseTasks';
 import { fetchCloudHabits, createCloudHabit, updateCloudHabit, deleteCloudHabit } from './lib/supabaseHabits';
 import { fetchCloudIdeas, createCloudIdea, deleteCloudIdea, updateCloudIdea } from './lib/supabaseIdeas';
 import { fetchCloudProjects, createCloudProject, updateCloudProject, deleteCloudProject } from './lib/supabaseProjects';
 import { fetchCloudDailyLogs, upsertCloudDailyLog } from './lib/supabaseDailyLogs';
+import { fetchCloudProductivity, upsertCloudProductivity } from './lib/supabaseProductivity';
 
 function App() {
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -65,7 +68,27 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabType>('tracker');
   const [currentThemeId, setCurrentThemeId] = useState<ThemeId>(getStoredTheme());
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+  const [isJarvisModalOpen, setIsJarvisModalOpen] = useState(false);
+  const [initialJarvisCommand, setInitialJarvisCommand] = useState<string | undefined>(undefined);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleWakeWordDetected = useCallback((command?: string) => {
+    setInitialJarvisCommand(command);
+    setIsJarvisModalOpen(true);
+  }, []);
+
+  const {
+    isWakeWordActive,
+    setIsWakeWordActive,
+    isClapDetectionActive,
+    setIsClapDetectionActive,
+    clapSensitivity,
+    setClapSensitivity,
+    isSupported: isWakeWordSupported,
+  } = useWakeWord({
+    onWake: handleWakeWordDetected,
+    isModalOpen: isJarvisModalOpen,
+  });
 
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const showToast = useCallback((message: string) => {
@@ -267,9 +290,14 @@ function App() {
     return THEMES.find(t => t.id === currentThemeId) || THEMES[0];
   }, [currentThemeId]);
 
+  useEffect(() => {
+    applyTheme(currentThemeId);
+  }, [currentThemeId]);
+
   const handleSelectTheme = (themeId: ThemeId) => {
     setCurrentThemeId(themeId);
     saveStoredTheme(themeId);
+    applyTheme(themeId);
   };
 
   const updateHabits = (newHabits: Habit[]) => {
@@ -871,6 +899,39 @@ function App() {
 
   };
 
+  const handleSaveProductivity = async (
+    dateStr: string,
+    ownProjectMinutes: number,
+    socialMediaMinutes: number,
+    notes?: string
+  ) => {
+    const activeLog = logs[dateStr] || { date: dateStr, completedHabitIds: [], isClosed: false };
+    const productivity: DailyProductivity = {
+      ownProjectMinutes,
+      socialMediaMinutes,
+      notes: notes || ''
+    };
+    const newLog: DailyLog = {
+      ...activeLog,
+      productivity
+    };
+
+    setLogs(prev => ({ ...prev, [dateStr]: newLog }));
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await Promise.all([
+          upsertCloudDailyLog(newLog),
+          upsertCloudProductivity(dateStr, ownProjectMinutes, socialMediaMinutes, notes)
+        ]);
+        showToast("Productividad sincronizada con Supabase.");
+      }
+    } catch (e: any) {
+      console.error('Error al guardar productividad en Supabase:', e);
+    }
+  };
+
   const handleSaveReview = (review: OneOnOneReview) => {
      setReviews(prev => {
         const idx = prev.findIndex(r => r.id === review.id);
@@ -899,7 +960,9 @@ function App() {
     
   }, [logs, addXP]);
   
-  const handlePlayWelcomeVoice = useCallback(() => {}, []);
+  const handlePlayWelcomeVoice = useCallback(() => {
+    setIsJarvisModalOpen(true);
+  }, []);
 
   const handleSignOut = useCallback(async () => {
     try {
@@ -930,12 +993,13 @@ function App() {
         return res;
       };
 
-      const [habitsRes, tasksRes, projectsRes, ideasRes, dailyLogsData] = await Promise.all([
+      const [habitsRes, tasksRes, projectsRes, ideasRes, dailyLogsData, productivityData] = await Promise.all([
         fetchHabitsWithFallback(),
         supabase.from('tasks').select('*').eq('user_id', userId),
         supabase.from('projects').select('*').eq('user_id', userId),
         supabase.from('ideas').select('*').eq('user_id', userId),
-        fetchCloudDailyLogs(userId)
+        fetchCloudDailyLogs(userId),
+        fetchCloudProductivity(userId)
       ]);
 
       if (habitsRes.data) {
@@ -1089,12 +1153,37 @@ function App() {
       }
       
       if (dailyLogsData) {
+         if (productivityData && Object.keys(productivityData).length > 0) {
+           Object.entries(productivityData).forEach(([dStr, pVal]) => {
+             if (dailyLogsData[dStr]) {
+               dailyLogsData[dStr].productivity = pVal;
+             } else {
+               dailyLogsData[dStr] = {
+                 date: dStr,
+                 completedHabitIds: [],
+                 productivity: pVal
+               };
+             }
+           });
+         }
          setLogs(dailyLogsData);
       }
       
       setLoading(false);
     } catch(err) { console.error(err); setLoading(false); }
   }, []);
+
+  const refreshUserData = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) {
+        await loadAllUserData(user.id);
+      }
+    } catch (err) {
+      console.error("Error al refrescar datos:", err);
+    }
+  }, [loadAllUserData]);
 
   const handleManualRefresh = useCallback(async () => {
     if (isSyncing) return;
@@ -1278,7 +1367,19 @@ function App() {
 
   if (loading) {
     return (
-      <div className={`min-h-screen w-full flex items-center justify-center bg-[#080b11] ${activeTheme.primaryBg} hud-bg-grid`} style={{ backgroundColor: '#080b11' }}>
+      <div 
+        data-theme={currentThemeId}
+        className={`min-h-screen w-full flex items-center justify-center ${activeTheme.primaryBg} hud-bg-grid`} 
+        style={{ 
+          backgroundColor: activeTheme.bgColor,
+          ['--hud-accent' as any]: activeTheme.accentHex,
+          ['--hud-accent-rgb' as any]: activeTheme.accentRgb,
+          ['--hud-secondary' as any]: activeTheme.secondaryHex,
+          ['--hud-secondary-rgb' as any]: activeTheme.secondaryRgb,
+          ['--hud-bg' as any]: activeTheme.bgColor,
+          ['--hud-card' as any]: activeTheme.cardBgColor,
+        }}
+      >
         <div className="flex flex-col items-center gap-4 text-[#00F0FF] font-mono">
           <Activity className="w-8 h-8 animate-spin" />
           <div className="text-xs tracking-wider animate-pulse">[ CARGANDO SESIÓN Y DATOS DE LA RED ]</div>
@@ -1289,7 +1390,19 @@ function App() {
 
   if (!isAuthenticated) {
     return (
-      <div className={`min-h-screen w-full overflow-x-hidden bg-[#080b11] ${activeTheme.primaryBg} hud-bg-grid text-slate-100 flex flex-col lg:flex-row antialiased selection:bg-[#06B6D4] selection:text-slate-950 transition-colors duration-300 font-sans relative`} style={{ backgroundColor: '#080b11' }}>
+      <div 
+        data-theme={currentThemeId}
+        className={`min-h-screen w-full overflow-x-hidden ${activeTheme.primaryBg} hud-bg-grid text-slate-100 flex flex-col lg:flex-row antialiased selection:bg-[#06B6D4] selection:text-slate-950 transition-colors duration-300 font-sans relative`} 
+        style={{ 
+          backgroundColor: activeTheme.bgColor,
+          ['--hud-accent' as any]: activeTheme.accentHex,
+          ['--hud-accent-rgb' as any]: activeTheme.accentRgb,
+          ['--hud-secondary' as any]: activeTheme.secondaryHex,
+          ['--hud-secondary-rgb' as any]: activeTheme.secondaryRgb,
+          ['--hud-bg' as any]: activeTheme.bgColor,
+          ['--hud-card' as any]: activeTheme.cardBgColor,
+        }}
+      >
         <AuthModal
           isOpen={true}
           onClose={() => {
@@ -1318,7 +1431,19 @@ function App() {
   }
 
   return (
-    <div className={`min-h-screen w-full overflow-x-hidden ${activeTheme.primaryBg} hud-bg-grid text-slate-100 flex flex-col lg:flex-row antialiased selection:bg-[#06B6D4] selection:text-slate-950 transition-colors duration-300 font-sans relative`}>
+    <div 
+      data-theme={currentThemeId}
+      className={`min-h-screen w-full overflow-x-hidden ${activeTheme.primaryBg} hud-bg-grid text-slate-100 flex flex-col antialiased selection:bg-[#06B6D4] selection:text-slate-950 transition-colors duration-300 font-sans relative`}
+      style={{
+        backgroundColor: activeTheme.bgColor,
+        ['--hud-accent' as any]: activeTheme.accentHex,
+        ['--hud-accent-rgb' as any]: activeTheme.accentRgb,
+        ['--hud-secondary' as any]: activeTheme.secondaryHex,
+        ['--hud-secondary-rgb' as any]: activeTheme.secondaryRgb,
+        ['--hud-bg' as any]: activeTheme.bgColor,
+        ['--hud-card' as any]: activeTheme.cardBgColor,
+      }}
+    >
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -1332,38 +1457,16 @@ function App() {
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onPlayWelcomeVoice={handlePlayWelcomeVoice}
         onSignOut={handleSignOut}
+        isWakeWordSupported={isWakeWordSupported}
+        isWakeWordActive={isWakeWordActive}
+        onToggleWakeWord={setIsWakeWordActive}
+        isClapDetectionActive={isClapDetectionActive}
+        onToggleClapDetection={setIsClapDetectionActive}
+        isSyncing={isSyncing}
+        onManualRefresh={handleManualRefresh}
       />
       <main className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full min-w-0 space-y-6">
-         <header className="bg-[#101827]/90 p-4 md:p-5 rounded-2xl border border-[#06B6D4]/30 shadow-[0_0_20px_rgba(6,182,212,0.1)] backdrop-blur-md relative z-30 font-mono flex flex-row items-center justify-between gap-4">
-           <div className="flex items-center gap-3.5 relative z-50 pointer-events-auto">
-             <div className="p-3 rounded-xl bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.25)] shrink-0">
-               <Activity className="w-6 h-6 text-[#00F0FF]" />
-             </div>
-             <div>
-               <div className="flex items-center gap-2.5 flex-wrap">
-                 <h1 className="text-xl md:text-2xl font-black text-slate-100 tracking-wider font-sans">CHECK</h1>
-                 <button type="button" onClick={() => setIsAuthModalOpen(true)} className="relative z-50 pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] text-[11px] font-bold hover:bg-[#00F0FF]/25 transition-all cursor-pointer shadow-[0_0_10px_rgba(0,240,255,0.15)]" title="Configurar Sesión / HUD">
-                   <span className="w-2 h-2 rounded-full bg-[#00F0FF] shadow-[0_0_8px_#00F0FF] animate-pulse"></span>
-                   ● {userSession?.hudName || "HUD INVITADO"}
-                 </button>
-               </div>
-               <p className="text-xs text-slate-400 mt-0.5 font-mono">MODULE // ACTIVE</p>
-             </div>
-           </div>
-           <div className="flex items-center gap-2.5 relative z-50 pointer-events-auto">
-             <button
-               type="button"
-               onClick={handleManualRefresh}
-               disabled={isSyncing}
-               className="flex items-center justify-center p-2.5 rounded-xl bg-[#00F0FF]/10 border border-[#00F0FF]/30 text-[#00F0FF] hover:bg-[#00F0FF]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer shadow-[0_0_10px_rgba(0,240,255,0.1)]"
-               title="Sincronizar Datos con la Nube"
-             >
-               <RotateCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-             </button>
-           </div>
-         </header>
-
-         {activeTab === 'tracker' && <DailyTracker habits={habits} logs={logs} projects={projects} onSaveProject={handleSaveProject} onToggleHabit={handleToggleHabit} onSaveHabit={handleSaveHabit} onDeleteHabit={handleDeleteHabit} onCloseDay={handleCloseDay} onSaveDailyWins={handleSaveDailyWins} onSaveSportsEntry={handleSaveSportsEntry} onDeleteSportsEntry={handleDeleteSportsEntry} onMoveHabit={handleMoveHabit} onReorderHabits={handleReorderHabits} calculateStreak={calculateStreak} />}
+         {activeTab === 'tracker' && <DailyTracker habits={habits} logs={logs} projects={projects} onSaveProject={handleSaveProject} onToggleHabit={handleToggleHabit} onSaveHabit={handleSaveHabit} onDeleteHabit={handleDeleteHabit} onCloseDay={handleCloseDay} onSaveDailyWins={handleSaveDailyWins} onSaveSportsEntry={handleSaveSportsEntry} onDeleteSportsEntry={handleDeleteSportsEntry} onSaveProductivity={handleSaveProductivity} onMoveHabit={handleMoveHabit} onReorderHabits={handleReorderHabits} calculateStreak={calculateStreak} />}
          {activeTab === 'exec' && <ExecCenter projects={projects} onSaveProject={handleSaveProject} onUpdateProjects={setProjects} />}
          {activeTab === 'projects' && <ProjectsManager projects={projects} onSaveProject={handleSaveProject} onDeleteProject={handleDeleteProject} />}
          {activeTab === 'analytics' && <AnalyticsTrends habits={habits} logs={logs} calculateStreak={calculateStreak} />}
@@ -1373,6 +1476,24 @@ function App() {
       </main>
 
       <ThemeSelectorModal isOpen={isThemeModalOpen} onClose={() => setIsThemeModalOpen(false)} currentThemeId={currentThemeId} onSelectTheme={handleSelectTheme} />
+      <JarvisAssistantModal
+        isOpen={isJarvisModalOpen}
+        onClose={() => {
+          setIsJarvisModalOpen(false);
+          setInitialJarvisCommand(undefined);
+        }}
+        currentTab={activeTab}
+        onNavigate={(tab) => setActiveTab(tab)}
+        projects={projects}
+        onRefreshData={refreshUserData}
+        initialCommand={initialJarvisCommand}
+        isWakeWordActive={isWakeWordActive}
+        onToggleWakeWord={setIsWakeWordActive}
+        isClapDetectionActive={isClapDetectionActive}
+        onToggleClapDetection={setIsClapDetectionActive}
+        clapSensitivity={clapSensitivity}
+        onChangeClapSensitivity={setClapSensitivity}
+      />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} userSession={userSession} onUpdateUserSession={handleUpdateUserSession} onInitializeOperator={handleInitializeOperator} onAuthSuccess={loadAllUserData} onPlayWelcomeVoice={handlePlayWelcomeVoice} onSignOut={handleSignOut} isClosable={true} />
       <ResetPasswordModal isOpen={isResetPasswordModalOpen} onClose={() => setIsResetPasswordModalOpen(false)} onSuccess={() => {}} />
 

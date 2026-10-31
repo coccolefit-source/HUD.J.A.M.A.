@@ -44,6 +44,12 @@ export async function fetchCloudDailyLogs(userId?: string): Promise<Record<strin
           closedAt: metrics.closedAt || undefined,
           closureRate: metrics.closureRate || 0,
           sportsEntries: metrics.sportsEntries || [],
+          productivity: metrics.productivity || {
+            ownProjectMinutes: Number(row.own_project_minutes || 0),
+            socialMediaMinutes: Number(row.social_media_minutes || 0),
+            notes: row.productivity_notes || ''
+          },
+          productivityEntries: metrics.productivityEntries || [],
           bonusXP: metrics.bonusXP || 0,
           focusMinutes: metrics.focusMinutes || 0,
           focusSessions: metrics.focusSessions || []
@@ -70,6 +76,8 @@ export async function upsertCloudDailyLog(log: DailyLog): Promise<{ success: boo
       closedAt: log.closedAt || null,
       closureRate: log.closureRate || 0,
       sportsEntries: log.sportsEntries || [],
+      productivity: log.productivity || { ownProjectMinutes: 0, socialMediaMinutes: 0 },
+      productivityEntries: log.productivityEntries || [],
       bonusXP: log.bonusXP || 0,
       focusMinutes: log.focusMinutes || 0,
       focusSessions: log.focusSessions || [],

@@ -1,13 +1,36 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <title>CHECK - Habit Tracker</title>
+    <meta name="description" content="Aplicación web de seguimiento de hábitos basada en neurociencia, dopamina táctil y reprogramación mental." />
+    <meta property="og:title" content="CHECK - Habit Tracker" />
+    <meta property="og:description" content="Aplicación web de seguimiento de hábitos basada en neurociencia, dopamina táctil y reprogramación mental." />
+    <script>
+      // Ignore HMR WebSocket connection errors in iframe environment
+      window.addEventListener('unhandledrejection', function(event) {
+        if (event && event.reason && (
+          (typeof event.reason.message === 'string' && event.reason.message.includes('WebSocket')) ||
+          (typeof event.reason.stack === 'string' && event.reason.stack.includes('@vite/client'))
+        )) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      });
+      window.addEventListener('error', function(event) {
+        if (event && (
+          (typeof event.message === 'string' && event.message.includes('WebSocket')) ||
+          (typeof event.filename === 'string' && event.filename.includes('@vite/client'))
+        )) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

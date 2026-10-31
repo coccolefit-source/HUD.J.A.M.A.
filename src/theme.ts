@@ -1,13 +1,27 @@
-export type ThemeId = 'jarvis_hud' | 'arc_reactor' | 'cobalt_hud' | 'cyberpunk' | 'oro_titanio';
+export type ThemeId = 
+  | 'jarvis_hud' 
+  | 'arc_reactor' 
+  | 'cobalt_hud' 
+  | 'cyberpunk' 
+  | 'oro_titanio'
+  | 'blanco_magenta'
+  | 'clean_pro'
+  | 'luxury_gold'
+  | 'stealth_platino';
 
 export interface ThemeConfig {
   id: ThemeId;
   name: string;
   description: string;
-  primaryBg: string; // e.g. bg-[#0A0D14]
+  primaryBg: string; // e.g. bg-[#080B11]
   cardBg: string; // e.g. bg-[#101827]/80
   accentColor: string;
   accentHex: string;
+  accentRgb: string;
+  secondaryHex: string;
+  secondaryRgb: string;
+  bgColor: string;
+  cardBgColor: string;
   accentGradient: string;
   badgeBg: string;
   borderAccent: string;
@@ -20,86 +34,231 @@ export const THEMES: ThemeConfig[] = [
   {
     id: 'jarvis_hud',
     name: 'J.A.R.V.I.S. HUD Holográfico',
-    description: 'Fondo negro espacial (#0A0D14), módulo vidriado (#101827), bordes cian neón (#06B6D4) y destellos azul cian (#00F0FF).',
-    primaryBg: 'bg-[#0A0D14]',
-    cardBg: 'bg-[#101827]/80',
+    description: 'Fondo negro espacial (#080B11), módulo vidriado (#101827), bordes cian neón (#06B6D4) y destellos azul cian (#00F0FF).',
+    primaryBg: 'bg-[#080B11]',
+    cardBg: 'bg-[#101827]/85',
     accentColor: 'cyan',
     accentHex: '#00F0FF',
+    accentRgb: '0, 240, 255',
+    secondaryHex: '#06B6D4',
+    secondaryRgb: '6, 182, 212',
+    bgColor: '#080B11',
+    cardBgColor: '#101827',
     accentGradient: 'from-[#00F0FF] to-cyan-500',
     badgeBg: 'bg-[#00F0FF]/15 text-[#00F0FF] border-[#00F0FF]/30',
     borderAccent: 'border-[#00F0FF]/30',
     textAccent: 'text-[#00F0FF]',
     glowColor: 'shadow-[#00F0FF]/20',
-    previewColors: ['#00F0FF', '#06B6D4', '#0A0D14']
+    previewColors: ['#00F0FF', '#06B6D4', '#080B11']
   },
   {
     id: 'arc_reactor',
     name: 'Reactor Arc Neón',
-    description: 'Negro espacial (#0A0D14), azul cian neón (#00F0FF) y acentos azul cobalto.',
-    primaryBg: 'bg-[#0A0D14]',
-    cardBg: 'bg-[#101827]/80',
+    description: 'Negro reactor (#050B14), destellos azul cielo eléctrico (#00E5FF) y acentos cobalto Stark (#3B82F6).',
+    primaryBg: 'bg-[#050B14]',
+    cardBg: 'bg-[#0C182E]/85',
     accentColor: 'cyan',
-    accentHex: '#00F0FF',
-    accentGradient: 'from-[#00F0FF] to-blue-500',
-    badgeBg: 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/30',
-    borderAccent: 'border-[#00F0FF]/40',
-    textAccent: 'text-[#00F0FF]',
-    glowColor: 'shadow-[#00F0FF]/20',
-    previewColors: ['#00F0FF', '#38BDF8', '#0A0D14']
+    accentHex: '#00E5FF',
+    accentRgb: '0, 229, 255',
+    secondaryHex: '#3B82F6',
+    secondaryRgb: '59, 130, 246',
+    bgColor: '#050B14',
+    cardBgColor: '#0C182E',
+    accentGradient: 'from-[#00E5FF] to-blue-500',
+    badgeBg: 'bg-[#00E5FF]/20 text-[#00E5FF] border-[#00E5FF]/30',
+    borderAccent: 'border-[#00E5FF]/40',
+    textAccent: 'text-[#00E5FF]',
+    glowColor: 'shadow-[#00E5FF]/25',
+    previewColors: ['#00E5FF', '#3B82F6', '#050B14']
   },
   {
     id: 'cobalt_hud',
     name: 'Azul Cobalto Tactical',
-    description: 'Azul profundo y cian eléctrico. Diseñado para alta legibilidad y cero fatiga visual.',
-    primaryBg: 'bg-[#0A0D14]',
-    cardBg: 'bg-[#101827]/80',
+    description: 'Azul comando militar táctico (#2563EB) con acentos hielo (#38BDF8) para máxima concentración.',
+    primaryBg: 'bg-[#060C1B]',
+    cardBg: 'bg-[#0E1B38]/85',
     accentColor: 'blue',
     accentHex: '#38BDF8',
+    accentRgb: '56, 189, 248',
+    secondaryHex: '#2563EB',
+    secondaryRgb: '37, 99, 235',
+    bgColor: '#060C1B',
+    cardBgColor: '#0E1B38',
     accentGradient: 'from-sky-400 to-blue-600',
     badgeBg: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
     borderAccent: 'border-sky-500/40',
     textAccent: 'text-sky-400',
     glowColor: 'shadow-sky-500/20',
-    previewColors: ['#38BDF8', '#2563EB', '#0A0D14']
+    previewColors: ['#38BDF8', '#2563EB', '#060C1B']
   },
   {
     id: 'cyberpunk',
     name: 'Neón Cyberpunk',
-    description: 'Cian eléctrico y magenta neón. Energético y futurista.',
-    primaryBg: 'bg-[#0A0D14]',
-    cardBg: 'bg-[#101827]/80',
-    accentColor: 'cyan',
-    accentHex: '#06b6d4',
-    accentGradient: 'from-cyan-400 to-fuchsia-500',
-    badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
-    borderAccent: 'border-cyan-500/40',
-    textAccent: 'text-cyan-400',
-    glowColor: 'shadow-cyan-500/20',
-    previewColors: ['#06b6d4', '#d946ef', '#0A0D14']
+    description: 'Rosa magenta neón (#FF007F) y violeta eléctrico (#A855F7). Estilo Cyberpunk de alta energía visual.',
+    primaryBg: 'bg-[#0D0512]',
+    cardBg: 'bg-[#1E0C24]/85',
+    accentColor: 'pink',
+    accentHex: '#FF007F',
+    accentRgb: '255, 0, 127',
+    secondaryHex: '#A855F7',
+    secondaryRgb: '168, 85, 247',
+    bgColor: '#0D0512',
+    cardBgColor: '#1E0C24',
+    accentGradient: 'from-[#FF007F] to-fuchsia-600',
+    badgeBg: 'bg-[#FF007F]/20 text-pink-300 border-[#FF007F]/30',
+    borderAccent: 'border-[#FF007F]/40',
+    textAccent: 'text-[#FF007F]',
+    glowColor: 'shadow-[#FF007F]/25',
+    previewColors: ['#FF007F', '#A855F7', '#0D0512']
   },
   {
     id: 'oro_titanio',
     name: 'Oro & Titanio Stark',
-    description: 'Dorado mate y bronce obsidian. Sensación de laboratorio de tecnología avanzada.',
-    primaryBg: 'bg-[#0A0D14]',
-    cardBg: 'bg-[#101827]/80',
+    description: 'Dorado Stark (#F59E0B) y ámbar titanio (#D97706) sobre obsidiana (#0E0A05). Estilo armadura premium.',
+    primaryBg: 'bg-[#0E0A05]',
+    cardBg: 'bg-[#1F180B]/85',
     accentColor: 'amber',
-    accentHex: '#f59e0b',
+    accentHex: '#F59E0B',
+    accentRgb: '245, 158, 11',
+    secondaryHex: '#D97706',
+    secondaryRgb: '217, 119, 6',
+    bgColor: '#0E0A05',
+    cardBgColor: '#1F180B',
     accentGradient: 'from-amber-400 to-yellow-600',
     badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
     borderAccent: 'border-amber-500/40',
     textAccent: 'text-amber-400',
     glowColor: 'shadow-amber-500/20',
-    previewColors: ['#f59e0b', '#d97706', '#0A0D14']
+    previewColors: ['#F59E0B', '#D97706', '#0E0A05']
+  },
+  {
+    id: 'blanco_magenta',
+    name: 'Blanco Cuarzo & Magenta',
+    description: 'Estética moderna y vibrante: acentos blanco puro (#FFFFFF) y destellos magenta neón (#FF1493) sobre fondo nocturno profundo.',
+    primaryBg: 'bg-[#090810]',
+    cardBg: 'bg-[#14121F]/85',
+    accentColor: 'magenta',
+    accentHex: '#FF1493',
+    accentRgb: '255, 20, 147',
+    secondaryHex: '#FFFFFF',
+    secondaryRgb: '255, 255, 255',
+    bgColor: '#090810',
+    cardBgColor: '#14121F',
+    accentGradient: 'from-[#FF1493] to-white',
+    badgeBg: 'bg-[#FF1493]/20 text-white border-[#FF1493]/40',
+    borderAccent: 'border-[#FF1493]/40',
+    textAccent: 'text-[#FF1493]',
+    glowColor: 'shadow-[#FF1493]/30',
+    previewColors: ['#FFFFFF', '#FF1493', '#090810']
+  },
+  {
+    id: 'clean_pro',
+    name: 'Minimal Ejecutivo Pro',
+    description: 'Diseño sobrio, ultra limpio y profesional de alta productividad. Grafito táctico con acento menta esmeralda quirúrgico (#10B981).',
+    primaryBg: 'bg-[#080D0B]',
+    cardBg: 'bg-[#0E1714]/85',
+    accentColor: 'emerald',
+    accentHex: '#10B981',
+    accentRgb: '16, 185, 129',
+    secondaryHex: '#34D399',
+    secondaryRgb: '52, 211, 153',
+    bgColor: '#080D0B',
+    cardBgColor: '#0E1714',
+    accentGradient: 'from-emerald-400 to-teal-600',
+    badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    borderAccent: 'border-emerald-500/40',
+    textAccent: 'text-emerald-400',
+    glowColor: 'shadow-emerald-500/25',
+    previewColors: ['#10B981', '#34D399', '#080D0B']
+  },
+  {
+    id: 'luxury_gold',
+    name: 'Obsidiana & Champagne Prestige',
+    description: 'Lujo supremo, refinado y costoso. Negro terciopelo (#070709) con toques de oro champagne (#E6CA65) y bronce de alta relojería.',
+    primaryBg: 'bg-[#070709]',
+    cardBg: 'bg-[#131215]/85',
+    accentColor: 'amber',
+    accentHex: '#E6CA65',
+    accentRgb: '230, 202, 101',
+    secondaryHex: '#B89535',
+    secondaryRgb: '184, 149, 53',
+    bgColor: '#070709',
+    cardBgColor: '#131215',
+    accentGradient: 'from-[#E6CA65] to-[#B89535]',
+    badgeBg: 'bg-[#E6CA65]/20 text-[#E6CA65] border-[#E6CA65]/35',
+    borderAccent: 'border-[#E6CA65]/40',
+    textAccent: 'text-[#E6CA65]',
+    glowColor: 'shadow-[#E6CA65]/25',
+    previewColors: ['#E6CA65', '#B89535', '#070709']
+  },
+  {
+    id: 'stealth_platino',
+    name: 'Stealth Platino & Carbono',
+    description: 'Elegancia monocromática ultra limpia y sofisticada. Plata platino (#E2E8F0) sobre fibra de carbono profunda (#0A0C0E).',
+    primaryBg: 'bg-[#0A0C0E]',
+    cardBg: 'bg-[#12161A]/85',
+    accentColor: 'slate',
+    accentHex: '#E2E8F0',
+    accentRgb: '226, 232, 240',
+    secondaryHex: '#94A3B8',
+    secondaryRgb: '148, 163, 184',
+    bgColor: '#0A0C0E',
+    cardBgColor: '#12161A',
+    accentGradient: 'from-slate-200 to-slate-400',
+    badgeBg: 'bg-slate-200/20 text-slate-100 border-slate-200/40',
+    borderAccent: 'border-slate-300/40',
+    textAccent: 'text-slate-100',
+    glowColor: 'shadow-slate-300/20',
+    previewColors: ['#E2E8F0', '#94A3B8', '#0A0C0E']
   }
 ];
 
-let currentInMemTheme: ThemeId = 'jarvis_hud';
+const THEME_STORAGE_KEY = 'jam_hud_active_theme';
 
 export function getStoredTheme(): ThemeId {
-  return currentInMemTheme;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem(THEME_STORAGE_KEY) as ThemeId | null;
+      if (saved && THEMES.some(t => t.id === saved)) {
+        return saved;
+      }
+    }
+  } catch (e) {
+    // fallback
+  }
+  return 'jarvis_hud';
 }
 
 export function saveStoredTheme(themeId: ThemeId): void {
-  currentInMemTheme = themeId;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(THEME_STORAGE_KEY, themeId);
+    }
+  } catch (e) {
+    // fallback
+  }
+}
+
+export function applyTheme(themeId: ThemeId): void {
+  const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
+  if (typeof document !== 'undefined') {
+    const root = document.documentElement;
+    root.setAttribute('data-theme', theme.id);
+    root.style.setProperty('--hud-accent', theme.accentHex);
+    root.style.setProperty('--hud-accent-rgb', theme.accentRgb);
+    root.style.setProperty('--hud-secondary', theme.secondaryHex);
+    root.style.setProperty('--hud-secondary-rgb', theme.secondaryRgb);
+    root.style.setProperty('--hud-bg', theme.bgColor);
+    root.style.setProperty('--hud-card', theme.cardBgColor);
+    root.style.backgroundColor = theme.bgColor;
+  }
+}
+
+// Auto-apply initial theme immediately on module load to prevent flash
+if (typeof window !== 'undefined') {
+  try {
+    applyTheme(getStoredTheme());
+  } catch (e) {
+    // ignore
+  }
 }

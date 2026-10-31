@@ -53,6 +53,20 @@ export interface FocusSessionEntry {
   completedAt: string;
 }
 
+export interface DailyProductivity {
+  ownProjectMinutes: number;
+  socialMediaMinutes: number;
+  notes?: string;
+}
+
+export interface ProductivityEntry {
+  id: string;
+  category: 'Proyecto propio' | 'Redes sociales';
+  minutes: number;
+  notes?: string;
+  createdAt?: string;
+}
+
 export interface DailyLog {
   date: string; // YYYY-MM-DD
   completedHabitIds: string[];
@@ -61,6 +75,8 @@ export interface DailyLog {
   notes?: string;
   dailyWins?: string[]; // Array of victory entries for the day
   sportsEntries?: SportsEntry[]; // Array of sports sessions for the day
+  productivity?: DailyProductivity; // Total minutos en Proyecto Propio y Redes Sociales
+  productivityEntries?: ProductivityEntry[]; // Registros individuales de productividad
   closureRate?: number; // snapshot of percentage when closed
   bonusXP?: number;
   focusMinutes?: number;

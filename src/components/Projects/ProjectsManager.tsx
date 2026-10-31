@@ -293,9 +293,6 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             <h1 className="text-xl md:text-2xl font-black text-slate-100 uppercase tracking-wider font-mono">
               Gestión de Proyectos
             </h1>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">
-              Control táctico de iniciativas, hitos de ejecución y seguimiento de avances.
-            </p>
           </div>
         </div>
 

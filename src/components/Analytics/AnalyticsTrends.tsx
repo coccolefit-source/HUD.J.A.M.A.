@@ -1,8 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area, Cell, PieChart, Pie
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area, Cell, PieChart, Pie, Legend
 } from 'recharts';
-import { TrendingUp, Flame, Calendar, Award, Target, PieChart as PieChartIcon, BarChart2 } from 'lucide-react';
+import { 
+  TrendingUp, 
+  Flame, 
+  Calendar, 
+  Award, 
+  Target, 
+  PieChart as PieChartIcon, 
+  BarChart2,
+  Briefcase,
+  Laptop,
+  Share2,
+  Clock,
+  ShieldCheck,
+  ArrowUpRight
+} from 'lucide-react';
 import { Habit, DailyLog } from '../../types';
 import { getPastNDays, formatFriendlyDate, parseISODate, MONTH_NAMES } from '../../utils/dateUtils';
 import { HabitHeatmap } from './HabitHeatmap';
@@ -18,6 +32,64 @@ export const AnalyticsTrends: React.FC<AnalyticsTrendsProps> = ({ habits, logs }
 
   const activeHabits = (habits || []).filter(h => !h.archived);
   const totalHabitsCount = activeHabits.length;
+
+  // Compute Productivity Trend Data (Proyecto Propio vs Redes Sociales)
+  const productivityTrendData = useMemo(() => {
+    const days = getPastNDays(timeRange);
+    return days.map(dStr => {
+      const log = logs[dStr];
+      const prod = log?.productivity;
+      const ownMin = prod?.ownProjectMinutes || 0;
+      const socialMin = prod?.socialMediaMinutes || 0;
+      const totalMin = ownMin + socialMin;
+      const focusRatio = totalMin > 0 ? Math.round((ownMin / totalMin) * 100) : 0;
+      
+      return {
+        date: dStr,
+        friendlyDate: formatFriendlyDate(dStr),
+        proyectoPropioMin: ownMin,
+        proyectoPropioHoras: Number((ownMin / 60).toFixed(1)),
+        redesSocialesMin: socialMin,
+        redesSocialesHoras: Number((socialMin / 60).toFixed(1)),
+        diferenciaMin: ownMin - socialMin,
+        focusRatio,
+        notes: prod?.notes || ''
+      };
+    });
+  }, [timeRange, logs]);
+
+  // Aggregate Productivity Stats
+  const productivityStats = useMemo(() => {
+    let totalOwnMin = 0;
+    let totalSocialMin = 0;
+    let loggedDaysCount = 0;
+
+    productivityTrendData.forEach(d => {
+      totalOwnMin += d.proyectoPropioMin;
+      totalSocialMin += d.redesSocialesMin;
+      if (d.proyectoPropioMin > 0 || d.redesSocialesMin > 0) {
+        loggedDaysCount++;
+      }
+    });
+
+    const totalMin = totalOwnMin + totalSocialMin;
+    const focusPercentage = totalMin > 0 ? Math.round((totalOwnMin / totalMin) * 100) : 0;
+    const avgOwnMinPerDay = Math.round(totalOwnMin / timeRange);
+    const avgSocialMinPerDay = Math.round(totalSocialMin / timeRange);
+    const netBalanceMin = totalOwnMin - totalSocialMin;
+
+    return {
+      totalOwnMin,
+      totalOwnHours: (totalOwnMin / 60).toFixed(1),
+      totalSocialMin,
+      totalSocialHours: (totalSocialMin / 60).toFixed(1),
+      focusPercentage,
+      avgOwnMinPerDay,
+      avgSocialMinPerDay,
+      loggedDaysCount,
+      netBalanceMin
+    };
+  }, [productivityTrendData, timeRange]);
 
   // Compute Daily Trend Data
   const dailyTrendData = useMemo(() => {
@@ -335,6 +407,143 @@ export const AnalyticsTrends: React.FC<AnalyticsTrendsProps> = ({ habits, logs }
                     <Cell key={`cell-m-${index}`} fill={index === monthlyData.length - 1 ? '#3B82F6' : 'rgba(6,182,212,0.5)'} />
                   ))}
                 </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* SECCIÓN DE TENDENCIAS DE PRODUCTIVIDAD (Proyecto Propio vs Redes Sociales) */}
+      <div className="bg-[#101827]/80 p-6 rounded-2xl border border-[#06B6D4]/30 shadow-xl backdrop-blur-md space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.2)]">
+              <Briefcase className="w-5 h-5 text-[#00F0FF]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-100 font-mono uppercase tracking-wider text-[#06B6D4]">
+                  /// Tendencias de Productividad
+                </h3>
+                <span className="px-2 py-0.5 text-[9px] font-mono font-bold rounded bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40">
+                  ENFOQUE VS DISTRACCIÓN
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-mono mt-0.5">
+                Comparativa de tiempo invertido en Proyecto Propio frente a Redes Sociales ({timeRange} días)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start md:self-auto">
+            <span className={`text-xs px-3 py-1 rounded-full font-mono font-bold border ${
+              productivityStats.netBalanceMin >= 0
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.15)]'
+                : 'bg-rose-500/10 text-rose-400 border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.15)]'
+            }`}>
+              {productivityStats.netBalanceMin >= 0
+                ? `SUPERÁVIT ENFOQUE: +${(productivityStats.netBalanceMin / 60).toFixed(1)}h`
+                : `DESVÍO REDES: ${(productivityStats.netBalanceMin / 60).toFixed(1)}h`}
+            </span>
+          </div>
+        </div>
+
+        {/* 4 Mini KPIs for Productivity */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-[#0A0D14] p-4 rounded-xl border border-slate-800">
+            <div className="flex items-center justify-between text-[#00F0FF] mb-1 font-mono">
+              <span className="text-[11px] font-bold uppercase tracking-wider">PROYECTO PROPIO</span>
+              <Laptop className="w-4 h-4 text-[#00F0FF]" />
+            </div>
+            <div className="text-2xl font-black font-mono text-[#00F0FF]">
+              {productivityStats.totalOwnHours}h
+            </div>
+            <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+              {productivityStats.totalOwnMin} min totales • Prom: {productivityStats.avgOwnMinPerDay}m/día
+            </p>
+          </div>
+
+          <div className="bg-[#0A0D14] p-4 rounded-xl border border-slate-800">
+            <div className="flex items-center justify-between text-rose-400 mb-1 font-mono">
+              <span className="text-[11px] font-bold uppercase tracking-wider">REDES SOCIALES</span>
+              <Share2 className="w-4 h-4 text-rose-400" />
+            </div>
+            <div className="text-2xl font-black font-mono text-rose-400">
+              {productivityStats.totalSocialHours}h
+            </div>
+            <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+              {productivityStats.totalSocialMin} min totales • Prom: {productivityStats.avgSocialMinPerDay}m/día
+            </p>
+          </div>
+
+          <div className="bg-[#0A0D14] p-4 rounded-xl border border-slate-800">
+            <div className="flex items-center justify-between text-cyan-400 mb-1 font-mono">
+              <span className="text-[11px] font-bold uppercase tracking-wider">RATIO DE ENFOQUE</span>
+              <ShieldCheck className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div className="text-2xl font-black font-mono text-cyan-300">
+              {productivityStats.focusPercentage}%
+            </div>
+            <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+              Tiempo en Proyecto vs Redes
+            </p>
+          </div>
+
+          <div className="bg-[#0A0D14] p-4 rounded-xl border border-slate-800">
+            <div className="flex items-center justify-between text-amber-400 mb-1 font-mono">
+              <span className="text-[11px] font-bold uppercase tracking-wider">DÍAS CON REGISTRO</span>
+              <Calendar className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-2xl font-black font-mono text-amber-300">
+              {productivityStats.loggedDaysCount} / {timeRange}
+            </div>
+            <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+              Jornadas con tiempo medido
+            </p>
+          </div>
+        </div>
+
+        {/* Dual Bar Chart: Daily Evolution */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+            <span>Evolución Diaria (Minutos por día)</span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded bg-[#00F0FF]" />
+                <span className="text-slate-300">Proyecto propio</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded bg-[#F43F5E]" />
+                <span className="text-slate-300">Redes sociales</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="h-64 md:h-72 w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={productivityTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(6,182,212,0.15)" vertical={false} />
+                <XAxis dataKey="friendlyDate" stroke="#06B6D4" fontSize={11} tickLine={false} fontFamily="monospace" />
+                <YAxis stroke="#06B6D4" fontSize={11} tickLine={false} unit="m" fontFamily="monospace" />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#0A0D14',
+                    borderColor: 'rgba(6, 182, 212, 0.4)',
+                    borderRadius: '12px',
+                    color: '#f8fafc',
+                    fontFamily: 'monospace',
+                    fontSize: '12px'
+                  }}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  formatter={(value: any, name: any) => {
+                    const valNum = Number(value) || 0;
+                    const hours = (valNum / 60).toFixed(1);
+                    const label = name === 'proyectoPropioMin' ? 'Proyecto propio' : 'Redes sociales';
+                    return [`${valNum} min (${hours}h)`, label];
+                  }}
+                />
+                <Bar dataKey="proyectoPropioMin" name="proyectoPropioMin" fill="#00F0FF" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="redesSocialesMin" name="redesSocialesMin" fill="#F43F5E" radius={[4, 4, 0, 0]} maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
           </div>

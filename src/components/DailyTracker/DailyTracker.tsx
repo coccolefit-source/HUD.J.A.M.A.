@@ -16,7 +16,12 @@ import {
   Bike,
   Footprints,
   Goal,
-  CheckCircle2
+  CheckCircle2,
+  Briefcase,
+  Laptop,
+  Share2,
+  Save,
+  Clock
 } from 'lucide-react';
 
 import { Habit, DailyLog, CategoryType, SportType, SportsEntry, Project, ProjectTask } from '../../types';
@@ -42,6 +47,7 @@ interface DailyTrackerProps {
   onSaveDailyWins?: (dateStr: string, wins: string[]) => void;
   onSaveSportsEntry?: (dateStr: string, entry: SportsEntry) => void;
   onDeleteSportsEntry?: (dateStr: string, entryId: string) => void;
+  onSaveProductivity?: (dateStr: string, ownProjectMinutes: number, socialMediaMinutes: number, notes?: string) => Promise<void> | void;
   calculateStreak: (habitId: string, uptoDate: string) => number;
 }
 
@@ -61,6 +67,7 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   onSaveDailyWins,
   onSaveSportsEntry,
   onDeleteSportsEntry,
+  onSaveProductivity,
   calculateStreak
 }) => {
   const todayStr = getTodayISO();
@@ -344,6 +351,72 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   const handleDeleteSportEntry = (entryId: string) => {
     onDeleteSportsEntry?.(selectedDate, entryId);
   };
+
+  // Productivity input state
+  const [prodOwnMinutes, setProdOwnMinutes] = useState<string>('');
+  const [prodSocialMinutes, setProdSocialMinutes] = useState<string>('');
+  const [prodNotes, setProdNotes] = useState<string>('');
+  const [isSavingProd, setIsSavingProd] = useState<boolean>(false);
+  const [prodSavedFeedback, setProdSavedFeedback] = useState<boolean>(false);
+
+  // Sync inputs when selectedDate changes or log loads
+  useEffect(() => {
+    const currentProd = activeLog?.productivity;
+    if (currentProd) {
+      setProdOwnMinutes(currentProd.ownProjectMinutes > 0 ? String(currentProd.ownProjectMinutes) : '');
+      setProdSocialMinutes(currentProd.socialMediaMinutes > 0 ? String(currentProd.socialMediaMinutes) : '');
+      setProdNotes(currentProd.notes || '');
+    } else {
+      setProdOwnMinutes('');
+      setProdSocialMinutes('');
+      setProdNotes('');
+    }
+  }, [selectedDate, activeLog?.productivity]);
+
+  const handleSaveProductivitySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const ownVal = parseInt(prodOwnMinutes, 10) || 0;
+    const socialVal = parseInt(prodSocialMinutes, 10) || 0;
+    if (ownVal < 0 || socialVal < 0) return;
+
+    setIsSavingProd(true);
+    try {
+      await onSaveProductivity?.(selectedDate, ownVal, socialVal, prodNotes.trim());
+      setProdSavedFeedback(true);
+      setTimeout(() => setProdSavedFeedback(false), 2500);
+    } finally {
+      setIsSavingProd(false);
+    }
+  };
+
+  const handleAddOwnMinutes = (delta: number) => {
+    const curr = parseInt(prodOwnMinutes, 10) || 0;
+    setProdOwnMinutes(String(Math.max(0, curr + delta)));
+  };
+
+  const handleAddSocialMinutes = (delta: number) => {
+    const curr = parseInt(prodSocialMinutes, 10) || 0;
+    setProdSocialMinutes(String(Math.max(0, curr + delta)));
+  };
+
+  const handleClearProductivity = async () => {
+    setProdOwnMinutes('');
+    setProdSocialMinutes('');
+    setProdNotes('');
+    setIsSavingProd(true);
+    try {
+      await onSaveProductivity?.(selectedDate, 0, 0, '');
+      setProdSavedFeedback(true);
+      setTimeout(() => setProdSavedFeedback(false), 2000);
+    } finally {
+      setIsSavingProd(false);
+    }
+  };
+
+  // Productivity totals calculation
+  const ownProjectMinToday = activeLog?.productivity?.ownProjectMinutes || 0;
+  const socialMediaMinToday = activeLog?.productivity?.socialMediaMinutes || 0;
+  const totalProdMinToday = ownProjectMinToday + socialMediaMinToday;
 
   const completedIds = activeLog.completedHabitIds || [];
   const activeHabits = useMemo(() => localHabits.filter(h => !h.archived), [localHabits]);
@@ -883,6 +956,174 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
         ) : (
           <div className="py-3 text-center bg-[#0A0D14]/50 border border-dashed border-slate-800 rounded-lg text-slate-500 text-xs">
             Sin sesiones deportivas registradas hoy.
+          </div>
+        )}
+      </div>
+
+      {/* Registro de Productividad */}
+      <div className="bg-[#101827] p-4 rounded-xl border border-slate-800 space-y-4 mt-6">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-[#00F0FF]" />
+            <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">Productividad</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {prodSavedFeedback && (
+              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/40">
+                Guardado en Supabase ✓
+              </span>
+            )}
+            <span className="text-[10px] px-2 py-0.5 rounded bg-[#00F0FF]/10 text-[#00F0FF] font-bold">
+              {totalProdMinToday > 0 
+                ? `${ownProjectMinToday} min Proyecto • ${socialMediaMinToday} min Redes hoy`
+                : '0 min registrados hoy'}
+            </span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveProductivitySubmit} className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Casilla 1: Proyecto Propio */}
+            <div className="bg-[#0A0D14] p-3 rounded-lg border border-slate-800/90 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[#00F0FF]">
+                  <Laptop className="w-3.5 h-3.5 text-[#00F0FF]" />
+                  <span>Proyecto propio</span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {parseInt(prodOwnMinutes, 10) > 0 
+                    ? `${Math.floor(parseInt(prodOwnMinutes, 10) / 60)}h ${parseInt(prodOwnMinutes, 10) % 60}m` 
+                    : '0h 0m'}
+                </span>
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={prodOwnMinutes}
+                  onChange={(e) => setProdOwnMinutes(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-1.5 bg-[#101827] border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-[#00F0FF] font-mono pr-12"
+                />
+                <span className="absolute right-2.5 top-2 text-[10px] text-slate-500 font-bold font-mono">MIN</span>
+              </div>
+              <div className="flex items-center gap-1.5 pt-0.5">
+                {[15, 30, 60].map((mins) => (
+                  <button
+                    key={`add-own-${mins}`}
+                    type="button"
+                    onClick={() => handleAddOwnMinutes(mins)}
+                    className="px-2 py-0.5 rounded bg-[#101827] hover:bg-[#00F0FF]/20 hover:text-[#00F0FF] text-[10px] text-slate-400 font-mono border border-slate-800 transition-colors cursor-pointer"
+                  >
+                    +{mins}m
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Casilla 2: Redes Sociales */}
+            <div className="bg-[#0A0D14] p-3 rounded-lg border border-slate-800/90 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+                  <Share2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Redes sociales</span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {parseInt(prodSocialMinutes, 10) > 0 
+                    ? `${Math.floor(parseInt(prodSocialMinutes, 10) / 60)}h ${parseInt(prodSocialMinutes, 10) % 60}m` 
+                    : '0h 0m'}
+                </span>
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={prodSocialMinutes}
+                  onChange={(e) => setProdSocialMinutes(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-1.5 bg-[#101827] border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-rose-400 font-mono pr-12"
+                />
+                <span className="absolute right-2.5 top-2 text-[10px] text-slate-500 font-bold font-mono">MIN</span>
+              </div>
+              <div className="flex items-center gap-1.5 pt-0.5">
+                {[15, 30, 60].map((mins) => (
+                  <button
+                    key={`add-social-${mins}`}
+                    type="button"
+                    onClick={() => handleAddSocialMinutes(mins)}
+                    className="px-2 py-0.5 rounded bg-[#101827] hover:bg-rose-500/20 hover:text-rose-400 text-[10px] text-slate-400 font-mono border border-slate-800 transition-colors cursor-pointer"
+                  >
+                    +{mins}m
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 pt-1">
+            <input
+              type="text"
+              value={prodNotes}
+              onChange={(e) => setProdNotes(e.target.value)}
+              placeholder="Notas de enfoque, hitos o contexto del día (opcional)..."
+              className="flex-1 min-w-0 px-3 py-1.5 bg-[#0A0D14] border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-[#00F0FF] placeholder:text-slate-600"
+            />
+            <button
+              type="submit"
+              disabled={isSavingProd}
+              className="px-4 py-1.5 rounded-lg bg-[#00F0FF] hover:bg-[#00F0FF]/90 disabled:opacity-40 text-[#0A0D14] font-bold text-xs transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer shadow-[0_0_12px_rgba(0,240,255,0.25)]"
+            >
+              <Save className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>{isSavingProd ? 'Guardando...' : 'Guardar Productividad'}</span>
+            </button>
+          </div>
+        </form>
+
+        {/* Resumen del día registrado */}
+        {(ownProjectMinToday > 0 || socialMediaMinToday > 0 || activeLog?.productivity?.notes) ? (
+          <div className="p-3 rounded-lg bg-[#0A0D14] border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-slate-200">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="font-bold text-[#00F0FF] flex items-center gap-1.5">
+                <Laptop className="w-3.5 h-3.5" />
+                Proyecto Propio: {ownProjectMinToday} min ({Math.floor(ownProjectMinToday / 60)}h {ownProjectMinToday % 60}m)
+              </span>
+              <span className="text-slate-600">•</span>
+              <span className="font-bold text-rose-400 flex items-center gap-1.5">
+                <Share2 className="w-3.5 h-3.5" />
+                Redes Sociales: {socialMediaMinToday} min ({Math.floor(socialMediaMinToday / 60)}h {socialMediaMinToday % 60}m)
+              </span>
+              {activeLog?.productivity?.notes && (
+                <>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-slate-400 truncate max-w-xs">— {activeLog.productivity.notes}</span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
+                ownProjectMinToday >= socialMediaMinToday 
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' 
+                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+              }`}>
+                {ownProjectMinToday >= socialMediaMinToday
+                  ? `+${ownProjectMinToday - socialMediaMinToday}m Enfoque`
+                  : `-${socialMediaMinToday - ownProjectMinToday}m Desvío`}
+              </span>
+              <button
+                type="button"
+                onClick={handleClearProductivity}
+                className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                title="Limpiar registro de productividad de este día"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="py-3 text-center bg-[#0A0D14]/50 border border-dashed border-slate-800 rounded-lg text-slate-500 text-xs">
+            Sin registros de productividad para este día. Ingresa los minutos trabajados arriba y presiona Guardar.
           </div>
         )}
       </div>
