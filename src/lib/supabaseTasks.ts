@@ -266,7 +266,7 @@ export async function syncProjectTasksToCloud(project: Project): Promise<Project
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return project;
 
-    const isVirtualProject = project.id === 'proj-other' || String(project.id).startsWith('proj-temp-') || String(project.id).startsWith('proj-');
+    const isVirtualProject = project.id === 'proj-other' || String(project.id).startsWith('proj-temp-');
     const targetDbProjectId = isVirtualProject ? null : project.id;
 
     // 1. Consultar IDs de tareas actuales en Supabase para este proyecto (o project_id IS NULL para proj-other)
@@ -337,6 +337,15 @@ export async function syncProjectTasksToCloud(project: Project): Promise<Project
         console.log(`Eliminando tarea removida de Supabase: ${cloudTaskId}`);
         await deleteCloudTask(cloudTaskId);
       }
+    }
+
+    // 3. Sincronizar columna tasks (jsonb) en la tabla projects de Supabase para reflejar los cambios
+    if (targetDbProjectId) {
+      await supabase
+        .from('projects')
+        .update({ tasks: updatedTasksList })
+        .eq('id', targetDbProjectId)
+        .eq('user_id', user.id);
     }
 
     return {

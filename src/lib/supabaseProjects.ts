@@ -9,6 +9,7 @@ export interface ProjectCloudPayload {
   priority?: string;
   progress?: number;
   category?: string;
+  tasks?: any[];
 }
 
 export async function createCloudProject(project: ProjectCloudPayload): Promise<{ success: boolean; data?: any; error?: any }> {
@@ -23,12 +24,13 @@ export async function createCloudProject(project: ProjectCloudPayload): Promise<
       return { success: false, error: userAuthError || 'Usuario no autenticado' };
     }
 
-    const payload = {
+    const payload: Record<string, any> = {
       title: project.title,
       description: project.description || '',
       status: project.status || 'Planificación',
       priority: project.priority || 'Media',
       progress: project.progress || 0,
+      tasks: project.tasks || [],
       user_id: user.id
     };
 
@@ -66,6 +68,7 @@ export async function updateCloudProject(
     if (updates.status !== undefined) updatePayload.status = updates.status;
     if (updates.priority !== undefined) updatePayload.priority = updates.priority;
     if (updates.progress !== undefined) updatePayload.progress = updates.progress;
+    if (updates.tasks !== undefined) updatePayload.tasks = updates.tasks;
 
     const { data, error } = await supabase
       .from('projects')
