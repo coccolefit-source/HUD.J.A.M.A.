@@ -169,11 +169,12 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
       // Server route unreachable (e.g. static deployment), continue to direct ElevenLabs call
     }
 
-    // 2. Direct ElevenLabs API fallback (for static deployments like Vercel/Netlify or custom key)
+    // 2. Direct ElevenLabs API fallback (for static deployments like GitHub/Vercel/Netlify)
+    const buildTimeKey = process.env.ELEVENLABS_API_KEY || '';
     const clientApiKey =
       (typeof window !== 'undefined' && localStorage.getItem('prime_elevenlabs_api_key')) ||
       (import.meta as any).env?.VITE_ELEVENLABS_API_KEY ||
-      (typeof process !== 'undefined' && (process.env as any)?.ELEVENLABS_API_KEY) ||
+      buildTimeKey ||
       '';
 
     if (clientApiKey) {
@@ -217,15 +218,36 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
   }
 }
 
-function fallbackWebSpeech(text: string): Promise<void> {
+function getAvailableVoices(): Promise<SpeechSynthesisVoice[]> {
   return new Promise((resolve) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      resolve();
+      resolve([]);
       return;
     }
+    const voices = window.speechSynthesis.getVoices();
+    if (voices && voices.length > 0) {
+      resolve(voices);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      resolve(window.speechSynthesis.getVoices() || []);
+    }, 600);
+    window.speechSynthesis.onvoiceschanged = () => {
+      clearTimeout(timeout);
+      resolve(window.speechSynthesis.getVoices() || []);
+    };
+  });
+}
 
-    window.speechSynthesis.cancel();
+async function fallbackWebSpeech(text: string): Promise<void> {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    return;
+  }
 
+  window.speechSynthesis.cancel();
+  const voices = await getAvailableVoices();
+
+  return new Promise((resolve) => {
     const savedURI = localStorage.getItem('jarvis_browser_voice_uri');
     const savedRate = parseFloat(localStorage.getItem('jarvis_voice_rate') || '1.02');
     const savedPitch = parseFloat(localStorage.getItem('jarvis_voice_pitch') || '1.0');
@@ -236,7 +258,6 @@ function fallbackWebSpeech(text: string): Promise<void> {
     utterance.pitch = isNaN(savedPitch) ? 1.0 : savedPitch;
 
     // Pick configured or best natural/neural human sounding voice in Spanish
-    const voices = window.speechSynthesis.getVoices();
     let selectedVoice = null;
     if (savedURI) {
       selectedVoice = voices.find(v => v.voiceURI === savedURI);
