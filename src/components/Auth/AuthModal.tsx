@@ -27,7 +27,6 @@ interface AuthModalProps {
   onUpdateUserSession: (session: UserSession) => void;
   onInitializeOperator: (session: UserSession, alias: string) => void;
   onAuthSuccess?: (userId: string) => Promise<void>;
-  onPlayWelcomeVoice?: () => void;
   onSignOut?: () => void;
   isClosable?: boolean;
 }
@@ -39,7 +38,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onUpdateUserSession,
   onInitializeOperator,
   onAuthSuccess,
-  onPlayWelcomeVoice,
   onSignOut,
   isClosable = true
 }) => {
@@ -114,9 +112,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         });
 
         setProfileSuccessMsg('¡Alias de operador actualizado con éxito!');
-        if (onPlayWelcomeVoice) {
-          onPlayWelcomeVoice();
-        }
         setTimeout(() => setProfileSuccessMsg(null), 3000);
       }
     } catch (err: any) {
@@ -210,12 +205,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       setIsAuthSuccess(true);
       onInitializeOperator(updatedSession, formattedAlias);
-
-      if (onPlayWelcomeVoice) {
-        setTimeout(() => {
-          onPlayWelcomeVoice();
-        }, 500);
-      }
 
       setTimeout(() => {
         setIsAuthSuccess(false);

@@ -38,8 +38,6 @@ import { ExecCenter } from './components/Exec/ExecCenter';
 import { FocusTimer } from './components/FocusTimer/FocusTimer';
 import { IdeasRadar } from './components/Ideas/IdeasRadar';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
-import { JarvisAssistantModal } from './components/JarvisAssistantModal';
-import { useWakeWord } from './lib/useWakeWord';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AuthModal } from './components/Auth/AuthModal';
 import { AuthBanner } from './components/Auth/AuthBanner';
@@ -68,27 +66,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabType>('tracker');
   const [currentThemeId, setCurrentThemeId] = useState<ThemeId>(getStoredTheme());
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
-  const [isJarvisModalOpen, setIsJarvisModalOpen] = useState(false);
-  const [initialJarvisCommand, setInitialJarvisCommand] = useState<string | undefined>(undefined);
   const [isSyncing, setIsSyncing] = useState(false);
-
-  const handleWakeWordDetected = useCallback((command?: string) => {
-    setInitialJarvisCommand(command);
-    setIsJarvisModalOpen(true);
-  }, []);
-
-  const {
-    isWakeWordActive,
-    setIsWakeWordActive,
-    isClapDetectionActive,
-    setIsClapDetectionActive,
-    clapSensitivity,
-    setClapSensitivity,
-    isSupported: isWakeWordSupported,
-  } = useWakeWord({
-    onWake: handleWakeWordDetected,
-    isModalOpen: isJarvisModalOpen,
-  });
 
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const showToast = useCallback((message: string) => {
@@ -953,9 +931,7 @@ function App() {
     
   }, [logs, addXP]);
   
-  const handlePlayWelcomeVoice = useCallback(() => {
-    setIsJarvisModalOpen(true);
-  }, []);
+
 
   const handleSignOut = useCallback(async () => {
     try {
@@ -1146,6 +1122,7 @@ function App() {
             status: 'En Progreso',
             priority: 'Media',
             progress: 0,
+            startDate: new Date().toISOString().split('T')[0],
             tasks: [],
             createdAt: new Date().toISOString()
           };
@@ -1245,7 +1222,9 @@ function App() {
   }, [isSyncing, loadAllUserData]);
 
   useEffect(() => {
-    const handleVisibilityChange = async () => {
+    let intervalId: any = null;
+
+    const syncNow = async () => {
       if (document.visibilityState === 'visible' && isSupabaseConfigured) {
         try {
           const { data: { session } } = await supabase.auth.getSession();
@@ -1253,13 +1232,23 @@ function App() {
             await loadAllUserData(session.user.id);
           }
         } catch (err) {
-          console.error("Error on visibility revalidation:", err);
+          console.error("Error en revalidación automática:", err);
         }
       }
     };
+
+    const handleVisibilityChange = () => {
+      syncNow();
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Background auto-sync every 20 seconds so user never has to press F5 or reload
+    intervalId = setInterval(syncNow, 20000);
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (intervalId) clearInterval(intervalId);
     };
   }, [loadAllUserData]);
 
@@ -1447,7 +1436,6 @@ function App() {
           onUpdateUserSession={handleUpdateUserSession}
           onInitializeOperator={handleInitializeOperator}
           onAuthSuccess={loadAllUserData}
-          onPlayWelcomeVoice={handlePlayWelcomeVoice}
           onSignOut={handleSignOut}
           isClosable={false}
         />
@@ -1457,7 +1445,6 @@ function App() {
           onSuccess={() => {
             setToastNotification('¡Contraseña restablecida con éxito!');
             setTimeout(() => setToastNotification(null), 4000);
-            handlePlayWelcomeVoice();
           }}
         />
       </div>
@@ -1489,13 +1476,7 @@ function App() {
         totalXP={totalXP}
         userSession={userSession}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
-        onPlayWelcomeVoice={handlePlayWelcomeVoice}
         onSignOut={handleSignOut}
-        isWakeWordSupported={isWakeWordSupported}
-        isWakeWordActive={isWakeWordActive}
-        onToggleWakeWord={setIsWakeWordActive}
-        isClapDetectionActive={isClapDetectionActive}
-        onToggleClapDetection={setIsClapDetectionActive}
         isSyncing={isSyncing}
         onManualRefresh={handleManualRefresh}
       />
@@ -1510,25 +1491,7 @@ function App() {
       </main>
 
       <ThemeSelectorModal isOpen={isThemeModalOpen} onClose={() => setIsThemeModalOpen(false)} currentThemeId={currentThemeId} onSelectTheme={handleSelectTheme} />
-      <JarvisAssistantModal
-        isOpen={isJarvisModalOpen}
-        onClose={() => {
-          setIsJarvisModalOpen(false);
-          setInitialJarvisCommand(undefined);
-        }}
-        currentTab={activeTab}
-        onNavigate={(tab) => setActiveTab(tab)}
-        projects={projects}
-        onRefreshData={refreshUserData}
-        initialCommand={initialJarvisCommand}
-        isWakeWordActive={isWakeWordActive}
-        onToggleWakeWord={setIsWakeWordActive}
-        isClapDetectionActive={isClapDetectionActive}
-        onToggleClapDetection={setIsClapDetectionActive}
-        clapSensitivity={clapSensitivity}
-        onChangeClapSensitivity={setClapSensitivity}
-      />
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} userSession={userSession} onUpdateUserSession={handleUpdateUserSession} onInitializeOperator={handleInitializeOperator} onAuthSuccess={loadAllUserData} onPlayWelcomeVoice={handlePlayWelcomeVoice} onSignOut={handleSignOut} isClosable={true} />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} userSession={userSession} onUpdateUserSession={handleUpdateUserSession} onInitializeOperator={handleInitializeOperator} onAuthSuccess={loadAllUserData} onSignOut={handleSignOut} isClosable={true} />
       <ResetPasswordModal isOpen={isResetPasswordModalOpen} onClose={() => setIsResetPasswordModalOpen(false)} onSuccess={() => {}} />
 
       <AnimatePresence>

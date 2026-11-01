@@ -15,7 +15,6 @@ import {
   Crosshair,
   Award,
   Timer,
-  Volume2,
   Radar,
   LogOut,
   User,
@@ -38,13 +37,7 @@ interface SidebarProps {
   totalXP?: number;
   userSession?: UserSession;
   onOpenAuthModal?: () => void;
-  onPlayWelcomeVoice?: () => void;
   onSignOut?: () => void;
-  isWakeWordSupported?: boolean;
-  isWakeWordActive?: boolean;
-  onToggleWakeWord?: (active: boolean) => void;
-  isClapDetectionActive?: boolean;
-  onToggleClapDetection?: (active: boolean) => void;
   isSyncing?: boolean;
   onManualRefresh?: () => void;
 }
@@ -60,13 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   totalXP = 0,
   userSession = { email: '', hudName: 'HUD INVITADO', updatedAt: '' },
   onOpenAuthModal,
-  onPlayWelcomeVoice,
   onSignOut,
-  isWakeWordSupported = true,
-  isWakeWordActive = true,
-  onToggleWakeWord,
-  isClapDetectionActive = true,
-  onToggleClapDetection,
   isSyncing = false,
   onManualRefresh
 }) => {
@@ -200,37 +187,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 relative z-40">
-          {isWakeWordSupported && onToggleWakeWord && (
-            <button
-              type="button"
-              onClick={() => onToggleWakeWord(!isWakeWordActive)}
-              className={`h-6 sm:h-7 flex items-center gap-1 px-1.5 sm:px-2 rounded-md border text-[9px] sm:text-[11px] font-mono transition-all cursor-pointer shadow-sm ${
-                isWakeWordActive
-                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25 shadow-[0_0_10px_rgba(16,185,129,0.18)]'
-                  : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:bg-slate-800'
-              }`}
-              title={isWakeWordActive ? "Detección continua activa. Di 'Prime' (Praim) en cualquier momento para hablar." : "Detección por voz pausada. Clic para activar."}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${isWakeWordActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-              <span className="hidden md:inline font-bold">"Prime":</span>
-              <span className="font-bold leading-none">{isWakeWordActive ? 'ON' : 'OFF'}</span>
-            </button>
-          )}
-          {onToggleClapDetection && (
-            <button
-              type="button"
-              onClick={() => onToggleClapDetection(!isClapDetectionActive)}
-              className={`h-6 sm:h-7 flex items-center gap-1 px-1.5 sm:px-2 rounded-md border text-[9px] sm:text-[11px] font-mono transition-all cursor-pointer shadow-sm ${
-                isClapDetectionActive
-                  ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/25 shadow-[0_0_10px_rgba(6,182,212,0.18)]'
-                  : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:bg-slate-800'
-              }`}
-              title={isClapDetectionActive ? "Activación por sonido activa." : "Activación por sonido pausada. Clic para activar."}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${isClapDetectionActive ? 'bg-cyan-400 animate-pulse' : 'bg-slate-500'}`} />
-              <span className="font-bold leading-none">{isClapDetectionActive ? 'ON' : 'OFF'}</span>
-            </button>
-          )}
           {onManualRefresh && (
             <button
               type="button"
@@ -249,14 +205,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="Acceso al Sistema Táctico / Perfil"
           >
             <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#00F0FF]" />
-          </button>
-          <button
-            type="button"
-            onClick={onPlayWelcomeVoice}
-            className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-[var(--hud-accent,#00F0FF)]/15 border border-[var(--hud-accent,#00F0FF)]/40 flex items-center justify-center text-[var(--hud-accent,#00F0FF)] hover:bg-[var(--hud-accent,#00F0FF)]/25 transition-all relative z-40 pointer-events-auto cursor-pointer shadow-[0_0_8px_rgba(var(--hud-accent-rgb,0,240,255),0.15)]"
-            title="Activar Asistente PRIME (Voz e IA)"
-          >
-            <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
           <button
             type="button"
@@ -510,19 +458,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Interfaz Táctica
             </span>
             <span className="text-[10px] bg-[#06B6D4]/20 px-2 py-0.5 rounded text-[#06B6D4] border border-[#06B6D4]/30">HUD</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onPlayWelcomeVoice}
-            className="w-full py-2.5 px-3 rounded-xl bg-[#101827] hover:bg-[#101827]/90 text-[var(--hud-accent,#00F0FF)] border border-[var(--hud-accent,#00F0FF)]/40 text-xs font-mono font-bold transition-all flex items-center justify-between group shadow-[0_0_12px_rgba(var(--hud-accent-rgb,0,240,255),0.12)] cursor-pointer"
-            title="Activar Asistente JARVIS (Voz e IA)"
-          >
-            <span className="flex items-center gap-2">
-              <Volume2 className="w-4 h-4 text-[var(--hud-accent,#00F0FF)] group-hover:scale-110 transition-transform" />
-              JARVIS IA
-            </span>
-            <span className="text-[10px] bg-[var(--hud-accent,#00F0FF)]/20 px-2 py-0.5 rounded text-[var(--hud-accent,#00F0FF)] border border-[var(--hud-accent,#00F0FF)]/30 animate-pulse">VOZ</span>
           </button>
 
           <button
