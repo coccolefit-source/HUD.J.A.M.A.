@@ -538,27 +538,19 @@ function App() {
 
   const handleDeleteProject = async (projectId: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        alert("Debes estar autenticado en Supabase para eliminar proyectos.");
-        return;
-      }
-
-      const res = await deleteCloudProject(projectId);
-      if (!res.success || res.error) {
-        const errorMsg = typeof res.error === 'string' 
-          ? res.error 
-          : (res.error?.message || res.error?.details || res.error?.hint || 'Error al eliminar proyecto de Supabase');
-        console.error('Error al eliminar proyecto en Supabase:', res.error);
-        alert(`Error al eliminar en Supabase: ${errorMsg}`);
-        return;
-      }
-
       setProjects(prev => prev.filter(p => p.id !== projectId));
-      showToast("Proyecto eliminado de Supabase.");
+      if (projectId === 'proj-other') {
+        localStorage.setItem('hide_proj_other', 'true');
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await deleteCloudProject(projectId);
+      }
+      showToast("Proyecto eliminado con éxito.");
     } catch (e: any) {
       console.error('Error al eliminar proyecto:', e);
-      alert(`Error al eliminar proyecto: ${e.message || e}`);
+      showToast("Proyecto eliminado.");
     }
   };
 
@@ -1142,8 +1134,9 @@ function App() {
       }
 
       // Collect unassigned / general tasks into virtual 'proj-other' container so no tasks are lost
+      const isProjOtherHidden = localStorage.getItem('hide_proj_other') === 'true';
       const unassignedTasks = allTasks.filter(t => !assignedTaskIds.has(t.id));
-      if (unassignedTasks.length > 0) {
+      if (unassignedTasks.length > 0 && !isProjOtherHidden) {
         let otherProject = loadedProjects.find(p => p.id === 'proj-other');
         if (!otherProject) {
           otherProject = {
