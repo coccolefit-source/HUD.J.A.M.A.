@@ -75,6 +75,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setIsLoading(true);
     try {
+      const { data: { user } } = isSupabaseConfigured ? await supabase.auth.getUser() : { data: { user: null } };
+      
+      if (user?.id) {
+        localStorage.setItem(`prime_user_alias_${user.id}`, cleanAlias);
+      }
+      localStorage.setItem('prime_user_alias_global', cleanAlias);
+
       if (isSupabaseConfigured) {
         // Update auth metadata in Supabase
         const { error } = await supabase.auth.updateUser({
@@ -91,10 +98,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         // Upsert user profile record if table exists
         try {
-          const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             await supabase.from('user_profiles').upsert({
               id: user.id,
+              alias: cleanAlias,
               hud_name: cleanHudName,
               updated_at: new Date().toISOString()
             });
@@ -104,6 +111,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }
 
         // Trigger updates in local app session state
+        onUpdateUserSession({
+          ...userSession,
+          alias: cleanAlias,
+          hudName: cleanHudName,
+          updatedAt: new Date().toISOString()
+        });
+
+        setProfileSuccessMsg('¡Alias de operador actualizado con éxito!');
+        setTimeout(() => setProfileSuccessMsg(null), 3000);
+      } else {
+        const cleanHudName = cleanAlias.toUpperCase().startsWith('HUD')
+          ? cleanAlias.toUpperCase()
+          : `HUD ${cleanAlias.toUpperCase()}`;
+
         onUpdateUserSession({
           ...userSession,
           alias: cleanAlias,

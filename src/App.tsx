@@ -1337,19 +1337,33 @@ function App() {
         setLoading(false);
         return;
     }
+
+    const resolveAlias = (user: any): string => {
+      const userId = user?.id || '';
+      const storedLocal = userId ? localStorage.getItem(`prime_user_alias_${userId}`) : null;
+      const storedGlobal = localStorage.getItem('prime_user_alias_global');
+      const metaAlias = user?.user_metadata?.alias;
+      const emailPrefix = user?.email ? user.email.split('@')[0].toUpperCase() : 'OPERADOR';
+      return metaAlias || storedLocal || storedGlobal || emailPrefix;
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
+        if (session?.user) {
             setIsAuthenticated(true);
-            const userAlias = session.user.user_metadata?.alias || session.user.email?.split('@')[0].toUpperCase() || 'OPERADOR';
+            const userAlias = resolveAlias(session.user);
             const cleanHudName = userAlias.toUpperCase().startsWith('HUD')
               ? userAlias.toUpperCase()
               : `HUD ${userAlias.toUpperCase()}`;
-            setUserSession({
+            
+            const newSession: UserSession = {
               email: session.user.email || '',
               alias: userAlias,
               hudName: cleanHudName,
               updatedAt: new Date().toISOString()
-            });
+            };
+
+            setUserSession(newSession);
+            saveStoredUserSession(newSession);
             loadAllUserData(session.user.id);
         } else {
             setLoading(false);
@@ -1357,31 +1371,37 @@ function App() {
     });
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-       if (session?.user) {
-          setIsAuthenticated(true);
-          
-          const userAlias = session.user.user_metadata?.alias || session.user.email?.split('@')[0].toUpperCase() || 'OPERADOR';
-          const cleanHudName = userAlias.toUpperCase().startsWith('HUD')
-            ? userAlias.toUpperCase()
-            : `HUD ${userAlias.toUpperCase()}`;
-            
-          setUserSession({
-            email: session.user.email || '',
-            alias: userAlias,
-            hudName: cleanHudName,
-            updatedAt: new Date().toISOString()
-          });
-
-          await loadAllUserData(session.user.id);
-       } else if (event === 'SIGNED_OUT' || !session) {
+       if (event === 'SIGNED_OUT') {
           setIsAuthenticated(false);
           setHabits([]);
           setProjects([]);
           setIdeas([]);
           setReviews([]);
           setLogs({});
-          setUserSession(null as any);
+          setUserSession(getStoredUserSession());
           setLoading(false);
+          return;
+       }
+
+       if (session?.user) {
+          setIsAuthenticated(true);
+          
+          const userAlias = resolveAlias(session.user);
+          const cleanHudName = userAlias.toUpperCase().startsWith('HUD')
+            ? userAlias.toUpperCase()
+            : `HUD ${userAlias.toUpperCase()}`;
+            
+          const newSession: UserSession = {
+            email: session.user.email || '',
+            alias: userAlias,
+            hudName: cleanHudName,
+            updatedAt: new Date().toISOString()
+          };
+
+          setUserSession(newSession);
+          saveStoredUserSession(newSession);
+
+          await loadAllUserData(session.user.id);
        }
     });
     return () => { subscription.unsubscribe(); };
