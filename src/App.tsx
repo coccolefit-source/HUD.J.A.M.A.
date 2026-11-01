@@ -1458,6 +1458,7 @@ function App() {
           onAuthSuccess={loadAllUserData}
           onSignOut={handleSignOut}
           isClosable={false}
+          isAuthenticated={isAuthenticated}
         />
         <ResetPasswordModal
           isOpen={isResetPasswordModalOpen}
@@ -1511,7 +1512,7 @@ function App() {
       </main>
 
       <ThemeSelectorModal isOpen={isThemeModalOpen} onClose={() => setIsThemeModalOpen(false)} currentThemeId={currentThemeId} onSelectTheme={handleSelectTheme} />
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} userSession={userSession} onUpdateUserSession={handleUpdateUserSession} onInitializeOperator={handleInitializeOperator} onAuthSuccess={loadAllUserData} onSignOut={handleSignOut} isClosable={true} />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} userSession={userSession} onUpdateUserSession={handleUpdateUserSession} onInitializeOperator={handleInitializeOperator} onAuthSuccess={loadAllUserData} onSignOut={handleSignOut} isClosable={true} isAuthenticated={isAuthenticated} />
       <ResetPasswordModal isOpen={isResetPasswordModalOpen} onClose={() => setIsResetPasswordModalOpen(false)} onSuccess={() => {}} />
 
       <AnimatePresence>

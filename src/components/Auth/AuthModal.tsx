@@ -29,6 +29,7 @@ interface AuthModalProps {
   onAuthSuccess?: (userId: string) => Promise<void>;
   onSignOut?: () => void;
   isClosable?: boolean;
+  isAuthenticated?: boolean;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -39,7 +40,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onInitializeOperator,
   onAuthSuccess,
   onSignOut,
-  isClosable = true
+  isClosable = true,
+  isAuthenticated = false
 }) => {
   const [authMode, setAuthMode] = useState<'signup' | 'signin' | 'recovery'>('signin');
 
@@ -136,7 +138,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setTimeout(() => setProfileSuccessMsg(null), 3000);
       }
     } catch (err: any) {
-      setAuthError(err.message || 'Error al actualizar el alias táctico.');
+      const msg = err?.message || 'Error al actualizar el alias táctico.';
+      if (msg.includes('Auth session missing') || msg.includes('JWT') || msg.includes('not logged in')) {
+        setAuthError('Sesión de Supabase no encontrada o caducada. Por favor inicia sesión nuevamente.');
+        if (onSignOut) {
+          onSignOut();
+        }
+      } else {
+        setAuthError(msg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -283,7 +293,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const isRegisteredUser = !!userSession?.email;
+  const isRegisteredUser = Boolean(isAuthenticated && userSession?.email);
 
   return (
     <AnimatePresence>
