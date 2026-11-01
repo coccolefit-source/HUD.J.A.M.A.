@@ -156,8 +156,8 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     });
   }, [allFlattenedTasks, filterStatus, selectedProjectId, selectedPriority, searchQuery, todayISO]);
 
-  // Handle toggle task completed state
-  const handleToggleTask = async (projectId: string, taskId: string) => {
+  // Handle toggle task completed state (Optimistic 0ms UI update)
+  const handleToggleTask = (projectId: string, taskId: string) => {
     const project = (projects || []).find(p => p.id === projectId);
     if (!project) return;
 
@@ -166,34 +166,28 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
 
     const newCompleted = !targetTask.completed;
 
-    const res = await updateCloudTask(taskId, { 
+    const updatedTasks = project.tasks.map(t => 
+      t.id === taskId ? { ...t, completed: newCompleted, status: newCompleted ? 'completed' : 'pending' } : t
+    );
+    const completedCount = updatedTasks.filter(t => t.completed).length;
+    const newProgress = updatedTasks.length > 0 
+      ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
+      : project.progress;
+
+    const updatedProject: Project = {
+      ...project,
+      tasks: updatedTasks,
+      progress: newProgress,
+      updatedAt: new Date().toISOString()
+    };
+
+    (onSaveProject as any)(updatedProject, { skipTaskSync: true, silent: true });
+
+    updateCloudTask(taskId, { 
       completed: newCompleted,
       status: newCompleted ? 'completed' : 'pending',
       isExec: true
-    });
-
-    if (res.success) {
-      const updatedTasks = project.tasks.map(t => 
-        t.id === taskId ? { ...t, completed: newCompleted } : t
-      );
-      const completedCount = updatedTasks.filter(t => t.completed).length;
-      const newProgress = updatedTasks.length > 0 
-        ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
-        : project.progress;
-
-      const updatedProject: Project = {
-        ...project,
-        tasks: updatedTasks,
-        progress: newProgress,
-        updatedAt: new Date().toISOString()
-      };
-
-      onSaveProject(updatedProject);
-    } else {
-      const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar tarea en Supabase');
-      console.error('Error en Supabase:', res.error);
-      alert(`Error en Supabase: ${errorMsg}`);
-    }
+    }).catch(err => console.error('Error en Supabase:', err));
   };
 
   // Handle update task due date directly
@@ -487,32 +481,19 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
       <div className="bg-[#101827] p-5 rounded-2xl border border-[#00F0FF]/30 shadow-[0_0_20px_rgba(0,240,255,0.08)] relative overflow-hidden font-mono">
         <div className="absolute top-0 right-0 w-32 h-32 bg-[#00F0FF]/5 rounded-full blur-2xl pointer-events-none" />
         
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/50 text-xs font-bold tracking-wider">
-                [ MODULE // EXEC_COMMAND_CENTER ]
-              </span>
-              <span className="text-[10px] text-slate-400">SYNC_LIVE_PROJECTS</span>
-            </div>
-            <h2 className="text-xl md:text-2xl font-black text-slate-100 font-sans tracking-wide">
-              Gestor Central de Tareas Pendientes
-            </h2>
-            <p className="text-xs text-slate-400 mt-1">
-              Consola central de control, deadlines tácticos y ejecuciones sincronizadas en tiempo real con Proyectos Importantes.
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base sm:text-xl font-black text-slate-100 font-sans tracking-wide">
+            Gestor Central de Tareas Pendientes
+          </h2>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="px-3 py-2 rounded-xl bg-[#0A0D14] border border-[#00F0FF]/30 text-xs font-mono text-slate-300 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
-              <span>Sincronizado: <strong className="text-[#00F0FF]">{(projects || []).length} Proyectos</strong></span>
-            </div>
+          <div className="px-2.5 py-1.5 rounded-xl bg-[#0A0D14] border border-[#00F0FF]/30 text-[11px] font-mono text-slate-300 flex items-center gap-1.5 shrink-0">
+            <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
+            <span>Sincronizado: <strong className="text-[#00F0FF]">{(projects || []).length} Proyectos</strong></span>
           </div>
         </div>
 
         {/* KPI Dashboard Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-800/80">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 pt-3 border-t border-slate-800/80">
           <div className="p-3 rounded-xl bg-[#0A0D14]/90 border border-slate-800 flex items-center justify-between">
             <div>
               <span className="text-[10px] text-slate-400 block font-mono">PENDIENTES</span>

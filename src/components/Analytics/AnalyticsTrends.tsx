@@ -211,40 +211,30 @@ export const AnalyticsTrends: React.FC<AnalyticsTrendsProps> = ({ habits, logs }
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#101827]/80 p-6 rounded-2xl border border-[#06B6D4]/30 shadow-[0_0_20px_rgba(6,182,212,0.08)] backdrop-blur-md relative overflow-hidden">
-        {/* Tactical Corner Accents */}
-        <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-2 border-l-2 border-[#00F0FF]" />
-        <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t-2 border-r-2 border-[#00F0FF]" />
-        <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b-2 border-l-2 border-[#00F0FF]" />
-        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-2 border-r-2 border-[#00F0FF]" />
-
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-2xl bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.2)]">
-            <TrendingUp className="w-6 h-6 text-[#00F0FF]" />
+      {/* Top Header - Compact Single Row */}
+      <div className="flex items-center justify-between gap-2 bg-[#101827]/80 px-3.5 py-2.5 rounded-2xl border border-[#06B6D4]/30 shadow-[0_0_20px_rgba(6,182,212,0.08)] backdrop-blur-md relative overflow-hidden">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="p-2 rounded-xl bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] shrink-0">
+            <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-[#00F0FF]" />
           </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl md:text-2xl font-bold text-slate-100 font-sans">Tendencias & Progreso</h1>
-              <span className="px-2 py-0.5 text-[9px] font-mono font-bold rounded bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40 shadow-[0_0_8px_rgba(0,240,255,0.2)]">MODULE // ANALYTICS</span>
-            </div>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">Patrones de constancia, balance personal y seguimiento de desempeño</p>
-          </div>
+          <h1 className="text-sm sm:text-lg font-bold text-slate-100 font-sans truncate">
+            Tendencias & Progreso
+          </h1>
         </div>
 
         {/* Time range selector */}
-        <div className="flex items-center gap-1.5 bg-[#0A0D14] p-1.5 rounded-xl border border-[#06B6D4]/30 self-start md:self-auto font-mono">
+        <div className="flex items-center gap-1 bg-[#0A0D14] p-1 rounded-xl border border-[#06B6D4]/30 shrink-0 font-mono">
           {([7, 14, 30] as const).map((r) => (
             <button
               key={r}
               onClick={() => setTimeRange(r)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                 timeRange === r
                   ? 'bg-[#06B6D4] text-[#0A0D14] shadow-[0_0_10px_rgba(6,182,212,0.4)]'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {r} Días
+              {r}d
             </button>
           ))}
         </div>
@@ -292,18 +282,14 @@ export const AnalyticsTrends: React.FC<AnalyticsTrendsProps> = ({ habits, logs }
       </div>
 
       {/* Main Chart 1: Daily Evolution Area/Line Chart */}
-      <div className="bg-[#101827]/80 p-6 rounded-2xl border border-[#06B6D4]/25 shadow-xl backdrop-blur-md space-y-4">
+      <div className="bg-[#101827]/80 p-5 rounded-2xl border border-[#06B6D4]/25 shadow-xl backdrop-blur-md space-y-3">
         <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-slate-100 font-mono uppercase tracking-wider text-[#06B6D4]">/// Tendencia Diaria de Cumplimiento</h3>
-            <p className="text-xs text-slate-400">Evolución porcentual de hábitos completados día a día ({timeRange} días)</p>
-          </div>
-          <span className="text-xs text-[#00F0FF] bg-[#00F0FF]/15 px-3 py-1 rounded-full border border-[#00F0FF]/40 font-mono font-bold shadow-[0_0_10px_rgba(0,240,255,0.2)]">
-            OBJETIVO: &gt; 70%
-          </span>
+          <h3 className="text-sm font-bold text-slate-100 font-mono uppercase tracking-wider text-[#06B6D4]">
+            Tendencia Diaria de Cumplimiento
+          </h3>
         </div>
 
-        <div className="h-64 md:h-80 w-full pt-4">
+        <div className="h-64 md:h-80 w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={dailyTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
@@ -414,38 +400,14 @@ export const AnalyticsTrends: React.FC<AnalyticsTrendsProps> = ({ habits, logs }
       </div>
 
       {/* SECCIÓN DE TENDENCIAS DE PRODUCTIVIDAD (Proyecto Propio vs Redes Sociales) */}
-      <div className="bg-[#101827]/80 p-6 rounded-2xl border border-[#06B6D4]/30 shadow-xl backdrop-blur-md space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.2)]">
-              <Briefcase className="w-5 h-5 text-[#00F0FF]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-slate-100 font-mono uppercase tracking-wider text-[#06B6D4]">
-                  /// Tendencias de Productividad
-                </h3>
-                <span className="px-2 py-0.5 text-[9px] font-mono font-bold rounded bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40">
-                  ENFOQUE VS DISTRACCIÓN
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 font-mono mt-0.5">
-                Comparativa de tiempo invertido en Proyecto Propio frente a Redes Sociales ({timeRange} días)
-              </p>
-            </div>
+      <div className="bg-[#101827]/80 p-5 rounded-2xl border border-[#06B6D4]/30 shadow-xl backdrop-blur-md space-y-5">
+        <div className="flex items-center gap-2.5 pb-2.5 border-b border-slate-800">
+          <div className="p-2 rounded-xl bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] shrink-0">
+            <Briefcase className="w-4 h-4 text-[#00F0FF]" />
           </div>
-
-          <div className="flex items-center gap-2 self-start md:self-auto">
-            <span className={`text-xs px-3 py-1 rounded-full font-mono font-bold border ${
-              productivityStats.netBalanceMin >= 0
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.15)]'
-                : 'bg-rose-500/10 text-rose-400 border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.15)]'
-            }`}>
-              {productivityStats.netBalanceMin >= 0
-                ? `SUPERÁVIT ENFOQUE: +${(productivityStats.netBalanceMin / 60).toFixed(1)}h`
-                : `DESVÍO REDES: ${(productivityStats.netBalanceMin / 60).toFixed(1)}h`}
-            </span>
-          </div>
+          <h3 className="text-sm font-bold text-slate-100 font-mono uppercase tracking-wider text-[#06B6D4]">
+            Tendencias de Productividad
+          </h3>
         </div>
 
         {/* 4 Mini KPIs for Productivity */}
@@ -551,13 +513,10 @@ export const AnalyticsTrends: React.FC<AnalyticsTrendsProps> = ({ habits, logs }
       </div>
 
       {/* Category Breakdown Chart */}
-      <div className="bg-[#101827]/80 p-6 rounded-2xl border border-[#06B6D4]/25 shadow-xl backdrop-blur-md space-y-4">
+      <div className="bg-[#101827]/80 p-5 rounded-2xl border border-[#06B6D4]/25 shadow-xl backdrop-blur-md space-y-4">
         <div className="flex items-center gap-2">
           <PieChartIcon className="w-5 h-5 text-[#00F0FF]" />
-          <div>
-            <h3 className="text-sm font-bold text-slate-100 font-mono uppercase tracking-wider text-[#06B6D4]">Distribución de Cumplimiento por Categoría</h3>
-            <p className="text-xs text-slate-400">Eficacia por pilar de vida en los últimos 14 días</p>
-          </div>
+          <h3 className="text-sm font-bold text-slate-100 font-mono uppercase tracking-wider text-[#06B6D4]">Distribución de Cumplimiento por Categoría</h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">

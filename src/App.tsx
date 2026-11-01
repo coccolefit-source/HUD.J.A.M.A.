@@ -454,26 +454,28 @@ function App() {
     }
   };
 
-  const handleSaveProject = async (project: Project) => {
+  const handleSaveProject = async (project: Project, options?: { skipTaskSync?: boolean; silent?: boolean }) => {
+    // 1. Instant Optimistic UI Update (0ms latency)
+    setProjects(prev => {
+      const exists = prev.some(p => p.id === project.id);
+      if (exists) {
+        return prev.map(p => p.id === project.id ? project : p);
+      }
+      return [project, ...prev];
+    });
+
+    // 2. Background Cloud Sync
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        alert("Debes estar autenticado en Supabase para guardar proyectos.");
-        return;
-      }
+      if (!user) return;
 
       // Check if virtual project container 'proj-other'
       if (project.id === 'proj-other') {
-        const syncedProject = await syncProjectTasksToCloud(project);
-        setProjects(prev => {
-          const exists = prev.some(p => p.id === 'proj-other');
-          if (exists) {
-            return prev.map(p => p.id === 'proj-other' ? syncedProject : p);
-          } else {
-            return [...prev, syncedProject];
-          }
-        });
-        showToast("Tareas guardadas en Supabase.");
+        if (!options?.skipTaskSync) {
+          const syncedProject = await syncProjectTasksToCloud(project);
+          setProjects(prev => prev.map(p => p.id === 'proj-other' ? syncedProject : p));
+        }
+        if (!options?.silent) showToast("Tareas guardadas en Supabase.");
         return;
       }
 
@@ -494,14 +496,15 @@ function App() {
         });
 
         if (!res.success || res.error) {
-          const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar proyecto en Supabase');
-          alert(`Error en Supabase: ${errorMsg}`);
+          console.error('Error al actualizar proyecto en Supabase:', res.error);
           return;
         }
 
-        const syncedProject = await syncProjectTasksToCloud(project);
-        setProjects(prev => prev.map(p => p.id === project.id ? syncedProject : p));
-        showToast("Proyecto actualizado en Supabase.");
+        if (!options?.skipTaskSync) {
+          const syncedProject = await syncProjectTasksToCloud(project);
+          setProjects(prev => prev.map(p => p.id === project.id ? syncedProject : p));
+        }
+        if (!options?.silent) showToast("Proyecto actualizado en Supabase.");
       } else {
         const res = await createCloudProject({
           title: project.title,
@@ -513,8 +516,7 @@ function App() {
         });
 
         if (!res.success || !res.data) {
-          const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al crear proyecto en Supabase');
-          alert(`Error en Supabase: ${errorMsg}`);
+          console.error('Error al crear proyecto en Supabase:', res.error);
           return;
         }
 
@@ -526,12 +528,11 @@ function App() {
         };
 
         const syncedProject = await syncProjectTasksToCloud(createdProj);
-        setProjects(prev => [syncedProject, ...prev.filter(p => p.id !== project.id)]);
-        showToast("Proyecto creado en Supabase.");
+        setProjects(prev => [syncedProject, ...prev.filter(p => p.id !== project.id && p.id !== realId)]);
+        if (!options?.silent) showToast("Proyecto creado en Supabase.");
       }
     } catch (err: any) {
       console.error('Error inesperado en handleSaveProject:', err);
-      alert(`Error en proyecto: ${err.message || err}`);
     }
   };
 
@@ -1138,6 +1139,46 @@ function App() {
           })),
           createdAt: r.created_at || new Date().toISOString()
         });
+      }
+
+      // Collect unassigned / general tasks into virtual 'proj-other' container so no tasks are lost
+      const unassignedTasks = allTasks.filter(t => !assignedTaskIds.has(t.id));
+      if (unassignedTasks.length > 0) {
+        let otherProject = loadedProjects.find(p => p.id === 'proj-other');
+        if (!otherProject) {
+          otherProject = {
+            id: 'proj-other',
+            title: 'Otras Tareas Tácticas',
+            description: 'Contenedor de tareas generales del sistema',
+            status: 'En Progreso',
+            priority: 'Media',
+            progress: 0,
+            tasks: [],
+            createdAt: new Date().toISOString()
+          };
+          loadedProjects.push(otherProject);
+        }
+
+        const existingIds = new Set(otherProject.tasks.map(t => String(t.id)));
+        for (const t of unassignedTasks) {
+          if (!existingIds.has(String(t.id))) {
+            otherProject.tasks.push({
+              id: t.id,
+              title: t.title,
+              completed: t.completed,
+              dueDate: t.dueDate,
+              isExec: t.isExec,
+              isMyDay: t.isMyDay,
+              description: t.description,
+              priority: t.priority,
+              status: t.status
+            });
+            existingIds.add(String(t.id));
+          }
+        }
+
+        const compCount = otherProject.tasks.filter(t => t.completed).length;
+        otherProject.progress = otherProject.tasks.length > 0 ? Math.round((compCount / otherProject.tasks.length) * 100) : 0;
       }
 
       setProjects(loadedProjects);

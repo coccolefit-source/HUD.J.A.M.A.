@@ -243,8 +243,8 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
     return list;
   }, [projects, selectedDate, todayStr]);
 
-  // Handle toggling project task from tracker
-  const handleToggleExecTask = async (projectId: string, taskId: string) => {
+  // Handle toggling project task from tracker (Optimistic 0ms UI update)
+  const handleToggleExecTask = (projectId: string, taskId: string) => {
     if (!projects || !onSaveProject) return;
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
@@ -253,23 +253,6 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
     if (!targetTask) return;
 
     const newCompleted = !targetTask.completed;
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      alert("Debes estar autenticado en Supabase para actualizar tareas.");
-      return;
-    }
-
-    const res = await updateCloudTask(taskId, { 
-      completed: newCompleted,
-      status: newCompleted ? 'completed' : 'pending'
-    });
-
-    if (!res.success || res.error) {
-      const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar tarea en Supabase');
-      alert(`Error en Supabase: ${errorMsg}`);
-      return;
-    }
 
     const updatedTasks = project.tasks.map(t => 
       t.id === taskId ? { ...t, completed: newCompleted, status: newCompleted ? 'completed' : 'pending' } : t
@@ -287,7 +270,14 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
       updatedAt: new Date().toISOString()
     };
 
-    onSaveProject(updatedProject);
+    // 1. Update UI immediately
+    (onSaveProject as any)(updatedProject, { skipTaskSync: true, silent: true });
+
+    // 2. Sync single task in background
+    updateCloudTask(taskId, { 
+      completed: newCompleted,
+      status: newCompleted ? 'completed' : 'pending'
+    }).catch(err => console.error('Error background sync task:', err));
   };
 
   // Daily wins input state
@@ -518,44 +508,45 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   };
 
   return (
-    <div className="space-y-5 pb-12">
-      {/* Date Navigation & Actions Header - Simple & Clean */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#101827] p-3.5 rounded-xl border border-slate-800 shadow-md">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-lg bg-[#00F0FF]/10 text-[#00F0FF]">
-            <CalendarIcon className="w-5 h-5" />
+    <div className="space-y-2.5 pb-12">
+      {/* Date Navigation Header - Ultra Compact Single Row */}
+      <div className="flex items-center justify-between gap-2 bg-[#101827] px-3 py-2 rounded-xl border border-slate-800 shadow-sm">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="p-1.5 rounded-lg bg-[#00F0FF]/10 text-[#00F0FF] shrink-0">
+            <CalendarIcon className="w-4 h-4" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-slate-100 capitalize">
-                {formatFriendlyDate(selectedDate)}
-              </h1>
-              {activeLog.isClosed && (
-                <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> CERRADO
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-400 font-mono">{formatFullDate(selectedDate)}</p>
+          <div className="flex items-baseline gap-2 min-w-0 truncate">
+            <h1 className="text-sm sm:text-base font-bold text-slate-100 capitalize shrink-0">
+              {formatFriendlyDate(selectedDate)}
+            </h1>
+            <span className="text-[11px] text-slate-400 font-mono truncate">
+              {parseISODate(selectedDate).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </span>
+            {activeLog.isClosed && (
+              <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-0.5 shrink-0">
+                <Lock className="w-2.5 h-2.5" />
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Simple Date Selector Navigation Controls */}
-        <div className="flex items-center gap-1.5 self-end sm:self-auto">
+        {/* Compact Date Selector Controls */}
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={handlePrevDay}
-            className="p-2 rounded-lg bg-[#0A0D14] hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors"
+            className="p-1.5 rounded-lg bg-[#0A0D14] hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors cursor-pointer"
             title="Día Anterior"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-3.5 h-3.5" />
           </button>
 
           {selectedDate !== todayStr && (
             <button
               onClick={handleGoToToday}
-              className="px-2.5 py-1.5 rounded-lg bg-[#0A0D14] hover:bg-slate-800 text-[#00F0FF] border border-slate-800 text-xs font-mono font-medium transition-colors flex items-center gap-1"
+              className="px-2 py-1 rounded-lg bg-[#0A0D14] hover:bg-slate-800 text-[#00F0FF] border border-slate-800 text-[11px] font-mono font-medium transition-colors flex items-center gap-1 cursor-pointer"
+              title="Ir a Hoy"
             >
-              <RotateCcw className="w-3 h-3" /> Hoy
+              <RotateCcw className="w-3 h-3" />
             </button>
           )}
 
@@ -563,39 +554,30 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
             type="date"
             value={selectedDate}
             onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-            className="bg-[#0A0D14] text-slate-200 text-xs font-mono px-2.5 py-1.5 rounded-lg border border-slate-800 focus:outline-none focus:border-[#00F0FF] cursor-pointer"
+            className="bg-[#0A0D14] text-slate-200 text-[11px] font-mono px-2 py-1 rounded-lg border border-slate-800 focus:outline-none focus:border-[#00F0FF] cursor-pointer w-[112px] sm:w-auto"
           />
 
           <button
             onClick={handleNextDay}
             disabled={selectedDate >= todayStr}
-            className="p-2 rounded-lg bg-[#0A0D14] hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-[#0A0D14] text-slate-300 border border-slate-800 transition-colors"
+            className="p-1.5 rounded-lg bg-[#0A0D14] hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-[#0A0D14] text-slate-300 border border-slate-800 transition-colors cursor-pointer"
             title="Siguiente Día"
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Barra Simple de Progreso y Acciones */}
-      <div className="bg-[#101827] p-4 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-300">Progreso Diario</span>
-              <span className="text-xs font-mono text-[#00F0FF] font-bold">
-                {completedCount}/{totalCount}
-              </span>
-            </div>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black font-mono text-[#00F0FF]">{completionRate}%</span>
-              <span className="text-xs text-slate-500 font-mono">
-                {completionRate === 100 ? '¡Todas las metas cumplidas!' : 'Avanzando en el día'}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex-1 max-w-xs h-3 bg-[#0A0D14] rounded-full overflow-hidden p-0.5 border border-slate-800">
+      {/* Barra Compacta de Progreso y Acciones - Single Row */}
+      <div className="bg-[#101827] px-3 py-2 rounded-xl border border-slate-800 flex items-center justify-between gap-2 shadow-sm">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-sm sm:text-base font-black font-mono text-[#00F0FF] shrink-0">
+            {completionRate}%
+          </span>
+          <span className="text-[11px] font-mono text-slate-400 shrink-0">
+            ({completedCount}/{totalCount})
+          </span>
+          <div className="flex-1 max-w-[120px] sm:max-w-xs h-2 bg-[#0A0D14] rounded-full overflow-hidden border border-slate-800">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${completionRate}%` }}
@@ -605,19 +587,21 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={openAdd}
-            className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#00F0FF] hover:bg-[#00F0FF]/90 text-[#0A0D14] font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(0,240,255,0.3)] cursor-pointer"
+            className="px-2.5 py-1.5 rounded-lg bg-[#00F0FF] hover:bg-[#00F0FF]/90 text-[#0A0D14] font-bold text-[11px] transition-all flex items-center justify-center gap-1 shadow-[0_0_10px_rgba(0,240,255,0.25)] cursor-pointer"
           >
-            <Plus className="w-4 h-4 stroke-[3]" /> Nuevo Hábito
+            <Plus className="w-3.5 h-3.5 stroke-[3]" />
+            <span>Hábito</span>
           </button>
           <button
             onClick={() => setIsClosureModalOpen(true)}
-            className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#0A0D14] hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            className="px-2.5 py-1.5 rounded-lg bg-[#0A0D14] hover:bg-slate-800 text-slate-200 border border-slate-800 text-[11px] font-medium transition-colors flex items-center justify-center gap-1 cursor-pointer"
+            title={activeLog.isClosed ? 'Día Cerrado' : 'Cerrar Día'}
           >
-            {activeLog.isClosed ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Unlock className="w-3.5 h-3.5 text-[#00F0FF]" />}
-            {activeLog.isClosed ? 'Día Cerrado' : 'Cerrar Día'}
+            {activeLog.isClosed ? <Lock className="w-3 h-3 text-amber-400" /> : <Unlock className="w-3 h-3 text-[#00F0FF]" />}
+            <span>{activeLog.isClosed ? 'Cerrado' : 'Cerrar Día'}</span>
           </button>
         </div>
       </div>
@@ -630,16 +614,16 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
         />
       )}
 
-      {/* Filtros y Búsqueda Simple */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#101827] p-2.5 rounded-xl border border-slate-800">
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto scrollbar-none">
+      {/* Filtros y Búsqueda Ultra Compactos */}
+      <div className="flex items-center justify-between gap-2 bg-[#101827] px-2.5 py-1.5 rounded-xl border border-slate-800">
+        <div className="flex items-center gap-1 overflow-x-auto flex-1 scrollbar-none">
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all cursor-pointer ${
                 selectedCategory === cat
-                  ? 'bg-[#00F0FF] text-[#0A0D14] font-bold shadow-[0_0_10px_rgba(0,240,255,0.3)]'
+                  ? 'bg-[#00F0FF] text-[#0A0D14] font-bold shadow-[0_0_8px_rgba(0,240,255,0.25)]'
                   : 'bg-[#0A0D14] text-slate-400 hover:text-slate-200 border border-slate-800'
               }`}
             >
@@ -648,14 +632,14 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
           ))}
         </div>
 
-        <div className="relative w-full sm:w-56">
-          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+        <div className="relative w-28 sm:w-48 shrink-0">
+          <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-slate-500" />
           <input
             type="text"
-            placeholder="Buscar hábito..."
+            placeholder="Buscar..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-[#0A0D14] border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-[#00F0FF] placeholder:text-slate-600"
+            className="w-full pl-7 pr-2 py-1 bg-[#0A0D14] border border-slate-800 rounded-lg text-[11px] text-slate-200 focus:outline-none focus:border-[#00F0FF] placeholder:text-slate-600"
           />
         </div>
       </div>

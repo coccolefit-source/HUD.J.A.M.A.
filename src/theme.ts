@@ -5,6 +5,9 @@ export type ThemeId =
   | 'cyberpunk' 
   | 'oro_titanio'
   | 'blanco_magenta'
+  | 'blanco_celeste'
+  | 'blanco_esmeralda'
+  | 'blanco_oro'
   | 'clean_pro'
   | 'luxury_gold'
   | 'stealth_platino';
@@ -13,8 +16,9 @@ export interface ThemeConfig {
   id: ThemeId;
   name: string;
   description: string;
-  primaryBg: string; // e.g. bg-[#080B11]
-  cardBg: string; // e.g. bg-[#101827]/80
+  isLight?: boolean;
+  primaryBg: string;
+  cardBg: string;
   accentColor: string;
   accentHex: string;
   accentRgb: string;
@@ -31,6 +35,90 @@ export interface ThemeConfig {
 }
 
 export const THEMES: ThemeConfig[] = [
+  {
+    id: 'blanco_magenta',
+    name: 'Blanco Suave & Magenta (Claro)',
+    description: 'Fondo blanco suave perlado (#F8F6FA), tarjetas blancas limpias (#FFFFFF) y acentos magenta vibrante (#E11D74).',
+    isLight: true,
+    primaryBg: 'bg-[#F8F6FA]',
+    cardBg: 'bg-white',
+    accentColor: 'magenta',
+    accentHex: '#E11D74',
+    accentRgb: '225, 29, 116',
+    secondaryHex: '#C026D3',
+    secondaryRgb: '192, 38, 211',
+    bgColor: '#F8F6FA',
+    cardBgColor: '#FFFFFF',
+    accentGradient: 'from-[#E11D74] to-[#C026D3]',
+    badgeBg: 'bg-[#E11D74]/15 text-[#E11D74] border-[#E11D74]/30',
+    borderAccent: 'border-[#E11D74]/35',
+    textAccent: 'text-[#E11D74]',
+    glowColor: 'shadow-[#E11D74]/20',
+    previewColors: ['#FFFFFF', '#F8F6FA', '#E11D74']
+  },
+  {
+    id: 'blanco_celeste',
+    name: 'Blanco Nube & Azul Stark (Claro)',
+    description: 'Fondo blanco nube (#F3F7FB) de descanso visual con tarjetas puras (#FFFFFF) y destellos azul cian (#0284C7).',
+    isLight: true,
+    primaryBg: 'bg-[#F3F7FB]',
+    cardBg: 'bg-white',
+    accentColor: 'cyan',
+    accentHex: '#0284C7',
+    accentRgb: '2, 132, 199',
+    secondaryHex: '#06B6D4',
+    secondaryRgb: '6, 182, 212',
+    bgColor: '#F3F7FB',
+    cardBgColor: '#FFFFFF',
+    accentGradient: 'from-[#0284C7] to-[#06B6D4]',
+    badgeBg: 'bg-[#0284C7]/15 text-[#0284C7] border-[#0284C7]/30',
+    borderAccent: 'border-[#0284C7]/35',
+    textAccent: 'text-[#0284C7]',
+    glowColor: 'shadow-[#0284C7]/20',
+    previewColors: ['#FFFFFF', '#F3F7FB', '#0284C7']
+  },
+  {
+    id: 'blanco_esmeralda',
+    name: 'Blanco Marfil & Esmeralda (Claro)',
+    description: 'Estética clínica y luminosa: fondo blanco marfil suave (#F4F9F6), tarjetas blancas y acento verde esmeralda (#059669).',
+    isLight: true,
+    primaryBg: 'bg-[#F4F9F6]',
+    cardBg: 'bg-white',
+    accentColor: 'emerald',
+    accentHex: '#059669',
+    accentRgb: '5, 150, 105',
+    secondaryHex: '#10B981',
+    secondaryRgb: '16, 185, 129',
+    bgColor: '#F4F9F6',
+    cardBgColor: '#FFFFFF',
+    accentGradient: 'from-[#059669] to-[#10B981]',
+    badgeBg: 'bg-[#059669]/15 text-[#059669] border-[#059669]/30',
+    borderAccent: 'border-[#059669]/35',
+    textAccent: 'text-[#059669]',
+    glowColor: 'shadow-[#059669]/20',
+    previewColors: ['#FFFFFF', '#F4F9F6', '#059669']
+  },
+  {
+    id: 'blanco_oro',
+    name: 'Blanco Alabastro & Ámbar (Claro)',
+    description: 'Fondo blanco cálido alabastro (#FAF8F5), tarjetas marfil claro (#FFFFFF) y acentos dorado titanio (#D97706).',
+    isLight: true,
+    primaryBg: 'bg-[#FAF8F5]',
+    cardBg: 'bg-white',
+    accentColor: 'amber',
+    accentHex: '#D97706',
+    accentRgb: '217, 119, 6',
+    secondaryHex: '#F59E0B',
+    secondaryRgb: '245, 158, 11',
+    bgColor: '#FAF8F5',
+    cardBgColor: '#FFFFFF',
+    accentGradient: 'from-[#D97706] to-[#F59E0B]',
+    badgeBg: 'bg-[#D97706]/15 text-[#D97706] border-[#D97706]/30',
+    borderAccent: 'border-[#D97706]/35',
+    textAccent: 'text-[#D97706]',
+    glowColor: 'shadow-[#D97706]/20',
+    previewColors: ['#FFFFFF', '#FAF8F5', '#D97706']
+  },
   {
     id: 'jarvis_hud',
     name: 'J.A.R.V.I.S. HUD Holográfico',
@@ -132,26 +220,6 @@ export const THEMES: ThemeConfig[] = [
     previewColors: ['#F59E0B', '#D97706', '#0E0A05']
   },
   {
-    id: 'blanco_magenta',
-    name: 'Blanco Cuarzo & Magenta',
-    description: 'Estética moderna y vibrante: acentos blanco puro (#FFFFFF) y destellos magenta neón (#FF1493) sobre fondo nocturno profundo.',
-    primaryBg: 'bg-[#090810]',
-    cardBg: 'bg-[#14121F]/85',
-    accentColor: 'magenta',
-    accentHex: '#FF1493',
-    accentRgb: '255, 20, 147',
-    secondaryHex: '#FFFFFF',
-    secondaryRgb: '255, 255, 255',
-    bgColor: '#090810',
-    cardBgColor: '#14121F',
-    accentGradient: 'from-[#FF1493] to-white',
-    badgeBg: 'bg-[#FF1493]/20 text-white border-[#FF1493]/40',
-    borderAccent: 'border-[#FF1493]/40',
-    textAccent: 'text-[#FF1493]',
-    glowColor: 'shadow-[#FF1493]/30',
-    previewColors: ['#FFFFFF', '#FF1493', '#090810']
-  },
-  {
     id: 'clean_pro',
     name: 'Minimal Ejecutivo Pro',
     description: 'Diseño sobrio, ultra limpio y profesional de alta productividad. Grafito táctico con acento menta esmeralda quirúrgico (#10B981).',
@@ -244,6 +312,7 @@ export function applyTheme(themeId: ThemeId): void {
   if (typeof document !== 'undefined') {
     const root = document.documentElement;
     root.setAttribute('data-theme', theme.id);
+    root.setAttribute('data-theme-mode', theme.isLight ? 'light' : 'dark');
     root.style.setProperty('--hud-accent', theme.accentHex);
     root.style.setProperty('--hud-accent-rgb', theme.accentRgb);
     root.style.setProperty('--hud-secondary', theme.secondaryHex);
@@ -262,3 +331,4 @@ if (typeof window !== 'undefined') {
     // ignore
   }
 }
+

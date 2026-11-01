@@ -157,44 +157,39 @@ export const IdeasRadar: React.FC<IdeasRadarProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6 relative">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(245,158,11,0.05)_0%,transparent_100%)] pointer-events-none" />
         
-        <div className="flex items-center gap-4 z-10">
-          <div className="w-14 h-14 rounded-xl bg-[#F59E0B]/10 border border-[#F59E0B]/30 flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.2)]">
-            <Radar className="w-8 h-8 text-[#F59E0B]" />
+        <div className="flex items-center gap-3 z-10">
+          <div className="w-11 h-11 rounded-xl bg-[#F59E0B]/10 border border-[#F59E0B]/30 flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+            <Radar className="w-6 h-6 text-[#F59E0B]" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-slate-100 uppercase tracking-widest flex items-center gap-2">
+            <h1 className="text-xl md:text-2xl font-black text-slate-100 uppercase tracking-widest flex items-center gap-2">
               RADAR DE IDEAS
             </h1>
-            <p className="text-slate-400 text-sm font-mono mt-1 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#F59E0B] animate-pulse shadow-[0_0_8px_#F59E0B]" />
-              SISTEMA DE CAPTURA RÁPIDA DE INTELIGENCIA
-            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 text-sm font-mono font-bold z-10 bg-slate-900/50 p-3 rounded-lg border border-slate-800 backdrop-blur-md">
-          <div className="flex flex-col items-end">
+        <div className="flex items-center gap-4 text-sm font-mono font-bold z-10 bg-slate-900/50 px-3 py-2 rounded-lg border border-slate-800 backdrop-blur-md">
+          <div className="flex items-center gap-2">
             <span className="text-slate-500 text-[10px] uppercase">Señales Activas</span>
-            <span className="text-[#F59E0B] text-lg">{ (ideas || []).length}</span>
+            <span className="text-[#F59E0B] text-base">{ (ideas || []).length}</span>
           </div>
         </div>
       </div>
 
       {/* QUICK CAPTURE FORM */}
-      <div className="bg-[#0A0D14]/80 rounded-xl border border-slate-800 p-6 relative overflow-hidden">
+      <div className="bg-[#0A0D14]/80 rounded-xl border border-slate-800 p-5 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-1 h-full bg-[#F59E0B]" />
         
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-3">
           <Zap className="w-5 h-5 text-[#F59E0B]" />
           <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider font-mono">
             Capturar Nueva Señal de Inteligencia
           </h2>
         </div>
 
-        <form onSubmit={handleRegisterIdea} className="space-y-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 space-y-2">
-              <label className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Identificador de la Idea (Título)</label>
+        <form onSubmit={handleRegisterIdea} className="space-y-3">
+          <div className="flex flex-col md:flex-row gap-3">
+            <div className="flex-1">
               <input
                 type="text"
                 value={formTitle}
@@ -205,8 +200,7 @@ export const IdeasRadar: React.FC<IdeasRadarProps> = ({
               />
             </div>
             
-            <div className="w-full md:w-64 space-y-2">
-              <label className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">Categoría Táctica</label>
+            <div className="w-full md:w-64">
               <select
                 value={formCategory}
                 onChange={e => setFormCategory(e.target.value as IdeaCategory)}
@@ -220,26 +214,22 @@ export const IdeasRadar: React.FC<IdeasRadarProps> = ({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <label className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Notas / Especificaciones Iniciales</label>
-              <div className="flex gap-2">
-                <span className="text-[10px] font-mono text-slate-500">Plantillas rápidas:</span>
-                <button
-                  type="button"
-                  onClick={() => setFormNotes(prev => prev + '\n\n### 📋 Siguientes Pasos:\n- [ ] ')}
-                  className="text-[10px] font-mono text-[#F59E0B] hover:underline"
-                >
-                  + Pasos
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormNotes(prev => prev + '\n\n### Recursos:\n- ')}
-                  className="text-[10px] font-mono text-[#F59E0B] hover:underline"
-                >
-                  + Recursos
-                </button>
-              </div>
+          <div className="space-y-1.5">
+            <div className="flex justify-end items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setFormNotes(prev => prev + '\n\n### 📋 Siguientes Pasos:\n- [ ] ')}
+                className="text-[10px] font-mono text-[#F59E0B] hover:underline"
+              >
+                + Pasos
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormNotes(prev => prev + '\n\n### Recursos:\n- ')}
+                className="text-[10px] font-mono text-[#F59E0B] hover:underline"
+              >
+                + Recursos
+              </button>
             </div>
             <textarea
               value={formNotes}

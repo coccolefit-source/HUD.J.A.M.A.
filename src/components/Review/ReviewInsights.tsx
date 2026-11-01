@@ -301,15 +301,11 @@ export const ReviewInsights: React.FC<ReviewInsightsProps> = ({
         <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-2 border-r-2 border-[#00F0FF]" />
 
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-2xl bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.2)]">
-            <Sparkles className="w-6 h-6 text-[#00F0FF]" />
+          <div className="p-2.5 rounded-2xl bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.2)]">
+            <Sparkles className="w-5 h-5 text-[#00F0FF]" />
           </div>
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl md:text-2xl font-bold text-slate-100 font-sans">Sesión 1-on-1 (Reflexión & Diagnostics)</h1>
-              <span className="px-2 py-0.5 text-[9px] font-mono font-bold rounded bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40 shadow-[0_0_8px_rgba(0,240,255,0.2)]">MODULE // 1x1_INSIGHTS</span>
-            </div>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">Diagnóstico táctico, análisis de fricción y reprogramación de compromisos</p>
+            <h1 className="text-lg md:text-2xl font-bold text-slate-100 font-sans">Sesión 1-on-1 (Reflexión & Diagnostics)</h1>
           </div>
         </div>
 
@@ -467,9 +463,6 @@ export const ReviewInsights: React.FC<ReviewInsightsProps> = ({
               </span>
             </div>
 
-            <label className="block text-[11px] text-slate-400 font-mono mb-1">
-              Selecciona o prioriza el hábito con menor cumplimiento para reactivarlo:
-            </label>
             <select
               value={focusHabitId}
               onChange={(e) => setFocusHabitId(e.target.value)}
@@ -657,9 +650,6 @@ export const ReviewInsights: React.FC<ReviewInsightsProps> = ({
             <span className="w-6 h-6 rounded-lg bg-[#00F0FF]/20 border border-[#00F0FF]/40 text-[#00F0FF] flex items-center justify-center font-mono font-black text-xs">1</span>
             ¿Qué funcionó bien este periodo?
           </label>
-          <p className="text-xs text-slate-400 font-mono mb-2">
-            Registra tus victorias, rutinas que fluyeron sin resistencia y detonantes positivos.
-          </p>
           <textarea
             rows={3}
             value={workedWell}
@@ -675,9 +665,6 @@ export const ReviewInsights: React.FC<ReviewInsightsProps> = ({
             <span className="w-6 h-6 rounded-lg bg-[#F97316]/20 border border-[#F97316]/40 text-[#F97316] flex items-center justify-center font-mono font-black text-xs">2</span>
             ¿Qué obstáculos aparecieron y cómo superarlos?
           </label>
-          <p className="text-xs text-slate-400 font-mono mb-2">
-            Identifica la fricción o distracciones sin juzgarte y define soluciones prácticas de ajuste.
-          </p>
           <textarea
             rows={3}
             value={obstacles}
@@ -693,9 +680,6 @@ export const ReviewInsights: React.FC<ReviewInsightsProps> = ({
             <span className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-500/40 text-blue-400 flex items-center justify-center font-mono font-black text-xs">3</span>
             Compromisos concretos para la próxima semana
           </label>
-          <p className="text-xs text-slate-400 font-mono mb-2">
-            Puntos irrenunciables, claros y ejecutables para la siguiente iteración.
-          </p>
           <textarea
             rows={3}
             value={commitments}

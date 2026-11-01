@@ -65,7 +65,11 @@ export const JarvisAssistantModal: React.FC<JarvisAssistantModalProps> = ({
   // Voice Customization State
   const [isVoiceConfigOpen, setIsVoiceConfigOpen] = useState(false);
   const [customVoiceId, setCustomVoiceId] = useState(() => {
-    return (typeof window !== 'undefined' && localStorage.getItem('jarvis_elevenlabs_voice_id')) || 'IKne3meq5aSn9XLyUdCD';
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('prime_elevenlabs_voice_id') : null;
+    if (saved && saved !== 'pNInz6obpgDQGcFmaJgB' && saved !== 'IKne3meq5aSn9XLyUdCD') {
+      return saved;
+    }
+    return '0SKRlkm2sk4SFqESZzly'; // Carlos Pro
   });
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedBrowserVoiceURI, setSelectedBrowserVoiceURI] = useState(() => {
@@ -93,7 +97,7 @@ export const JarvisAssistantModal: React.FC<JarvisAssistantModalProps> = ({
   const handleUpdateElevenVoice = (voiceId: string) => {
     setCustomVoiceId(voiceId);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('jarvis_elevenlabs_voice_id', voiceId);
+      localStorage.setItem('prime_elevenlabs_voice_id', voiceId);
     }
   };
 
@@ -120,13 +124,13 @@ export const JarvisAssistantModal: React.FC<JarvisAssistantModalProps> = ({
 
   const handleTestVoice = () => {
     setIsSpeaking(true);
-    speakWithElevenLabs('¡Hola! Esta es la nueva configuración de voz. ¿Qué te parece cómo suena ahora?').finally(() => {
+    speakWithElevenLabs('Bienvenido de nuevo, señor. Todos los sistemas de Prime están en línea y calibrados con su voz de ElevenLabs.').finally(() => {
       setIsSpeaking(false);
     });
   };
 
   const handleResetVoiceDefaults = () => {
-    handleUpdateElevenVoice('IKne3meq5aSn9XLyUdCD');
+    handleUpdateElevenVoice('0SKRlkm2sk4SFqESZzly');
     handleUpdateBrowserVoice('');
     handleUpdateRate(1.02);
     handleUpdatePitch(1.0);
@@ -134,6 +138,7 @@ export const JarvisAssistantModal: React.FC<JarvisAssistantModalProps> = ({
 
   const recognitionRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const transcriptRef = useRef<string>('');
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -156,6 +161,7 @@ export const JarvisAssistantModal: React.FC<JarvisAssistantModalProps> = ({
         for (let i = event.resultIndex; i < event.results.length; i++) {
           currentTranscript += event.results[i][0].transcript;
         }
+        transcriptRef.current = currentTranscript;
         setTranscript(currentTranscript);
         setInputText(currentTranscript);
       };
@@ -167,6 +173,11 @@ export const JarvisAssistantModal: React.FC<JarvisAssistantModalProps> = ({
 
       recognition.onend = () => {
         setIsListening(false);
+        if (transcriptRef.current && transcriptRef.current.trim()) {
+          const captured = transcriptRef.current.trim();
+          transcriptRef.current = '';
+          handleSendCommand(captured);
+        }
       };
 
       recognitionRef.current = recognition;
@@ -232,6 +243,7 @@ export const JarvisAssistantModal: React.FC<JarvisAssistantModalProps> = ({
 
   const startListening = () => {
     stopCurrentSpeech();
+    transcriptRef.current = '';
     if (recognitionRef.current && !isListening) {
       try {
         setTranscript('');
@@ -263,9 +275,10 @@ export const JarvisAssistantModal: React.FC<JarvisAssistantModalProps> = ({
   };
 
   const handleSendCommand = async (commandToSend?: string) => {
-    const textToProcess = (commandToSend || inputText || transcript).trim();
+    const textToProcess = (commandToSend || inputText || transcript || transcriptRef.current).trim();
     if (!textToProcess || isProcessing) return;
 
+    transcriptRef.current = '';
     stopListening();
     stopCurrentSpeech();
     setIsProcessing(true);
@@ -414,14 +427,18 @@ export const JarvisAssistantModal: React.FC<JarvisAssistantModalProps> = ({
                 {/* ElevenLabs Voice Section */}
                 <div>
                   <label className="text-[11px] text-slate-300 font-semibold block mb-1">
-                    Voz de ElevenLabs (Presets o Tu Voice ID personalizado):
+                    Tus Voces Conectadas en ElevenLabs:
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-2">
                     {[
-                      { id: 'IKne3meq5aSn9XLyUdCD', label: 'Charlie (Cercano y Amigable)' },
-                      { id: '21m00Tcm4TlvDq8ikWAM', label: 'Rachel (Cálida y Natural)' },
-                      { id: 'pNInz6obpgDQGcFmaJgB', label: 'Adam (Cotidiano y Claro)' },
-                      { id: 'bIHbv24MWmeRgasZH58o', label: 'Will (Relajado y Humano)' },
+                      { id: '0SKRlkm2sk4SFqESZzly', label: 'Carlos Pro (Latino)' },
+                      { id: 'LHNW6W9WobxVOw2nqJuR', label: 'Diego R (Profundo)' },
+                      { id: 'XyPIlDiohfZSbL4jAB2e', label: 'Marco (Español)' },
+                      { id: 'lo1O1Dz1Tu4FWVEPaxuT', label: 'Oliver (Narrador)' },
+                      { id: 'onwK4e9ZLuTAKqWW03F9', label: 'Daniel (Estilo Prime)' },
+                      { id: 'JBFqnCBsd6RMkjVDRZzb', label: 'George (Cálido IA)' },
+                      { id: 'nPczCjzI2devNBz1zQrb', label: 'Brian (Resonante)' },
+                      { id: 'cjVigY5qzO86Huf0OWal', label: 'Eric (Natural)' },
                     ].map((v) => (
                       <button
                         key={v.id}

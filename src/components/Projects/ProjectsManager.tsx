@@ -169,29 +169,17 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     }
   };
 
-  // Quick Task Toggle on Project Card
-  const handleToggleTask = async (project: Project, taskId: string) => {
+  // Quick Task Toggle on Project Card (Optimistic 0ms UI update)
+  const handleToggleTask = (project: Project, taskId: string) => {
     const targetTask = project.tasks.find(t => t.id === taskId);
     if (!targetTask) return;
 
     const newCompleted = !targetTask.completed;
-    
-    const res = await updateCloudTask(taskId, { 
-      completed: newCompleted,
-      status: newCompleted ? 'completed' : 'pending'
-    });
-
-    if (!res.success || res.error) {
-      const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar tarea en Supabase');
-      alert(`Error en Supabase: ${errorMsg}`);
-      return;
-    }
 
     const updatedTasks = project.tasks.map(t => 
       t.id === taskId ? { ...t, completed: newCompleted, status: newCompleted ? 'completed' : 'pending' } : t
     );
 
-    // Auto calculate progress percentage based on completed tasks if tasks exist
     const completedCount = updatedTasks.filter(t => t.completed).length;
     const newProgress = updatedTasks.length > 0 
       ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100)) 
@@ -204,7 +192,12 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       status: newProgress === 100 ? 'Completado' : (project.status === 'Completado' ? 'En Progreso' : project.status)
     };
 
-    onSaveProject(updatedProject);
+    (onSaveProject as any)(updatedProject, { skipTaskSync: true, silent: true });
+
+    updateCloudTask(taskId, { 
+      completed: newCompleted,
+      status: newCompleted ? 'completed' : 'pending'
+    }).catch(err => console.error('Error en Supabase:', err));
   };
 
   // Quick Progress Adjuster

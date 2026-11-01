@@ -56,12 +56,39 @@
   }
 
   [data-theme="blanco_magenta"] {
-    --hud-accent: #FF1493;
-    --hud-accent-rgb: 255, 20, 147;
-    --hud-secondary: #FFFFFF;
-    --hud-secondary-rgb: 255, 255, 255;
-    --hud-bg: #090810;
-    --hud-card: #14121F;
+    --hud-accent: #E11D74;
+    --hud-accent-rgb: 225, 29, 116;
+    --hud-secondary: #C026D3;
+    --hud-secondary-rgb: 192, 38, 211;
+    --hud-bg: #F8F6FA;
+    --hud-card: #FFFFFF;
+  }
+
+  [data-theme="blanco_celeste"] {
+    --hud-accent: #0284C7;
+    --hud-accent-rgb: 2, 132, 199;
+    --hud-secondary: #06B6D4;
+    --hud-secondary-rgb: 6, 182, 212;
+    --hud-bg: #F3F7FB;
+    --hud-card: #FFFFFF;
+  }
+
+  [data-theme="blanco_esmeralda"] {
+    --hud-accent: #059669;
+    --hud-accent-rgb: 5, 150, 105;
+    --hud-secondary: #10B981;
+    --hud-secondary-rgb: 16, 185, 129;
+    --hud-bg: #F4F9F6;
+    --hud-card: #FFFFFF;
+  }
+
+  [data-theme="blanco_oro"] {
+    --hud-accent: #D97706;
+    --hud-accent-rgb: 217, 119, 6;
+    --hud-secondary: #F59E0B;
+    --hud-secondary-rgb: 245, 158, 11;
+    --hud-bg: #FAF8F5;
+    --hud-card: #FFFFFF;
   }
 
   [data-theme="clean_pro"] {
@@ -95,7 +122,14 @@
     background-color: var(--hud-bg, #080B11);
     color: #f1f5f9;
     min-height: 100vh;
-    transition: background-color 0.3s ease;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  html[data-theme-mode="light"],
+  html[data-theme-mode="light"] body,
+  html[data-theme-mode="light"] #root {
+    background-color: var(--hud-bg, #F8F6FA);
+    color: #0F172A;
   }
 }
 
@@ -269,3 +303,75 @@
   background-color: var(--hud-accent) !important;
   color: #050505 !important;
 }
+
+/* ==========================================================================
+   Soft-White / Light Theme Overrides ([data-theme-mode="light"])
+   ========================================================================== */
+
+[data-theme-mode="light"] .hud-bg-grid {
+  background-color: var(--hud-bg, #F8F6FA) !important;
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(var(--hud-accent-rgb), 0.1) 0%, transparent 70%),
+    linear-gradient(to right, rgba(var(--hud-accent-rgb), 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(var(--hud-accent-rgb), 0.05) 1px, transparent 1px) !important;
+}
+
+/* Main Cards & Surfaces -> Pure / Soft White */
+[data-theme-mode="light"] .bg-\[\#101827\],
+[data-theme-mode="light"] [class*="bg-\[\#101827\]"],
+[data-theme-mode="light"] .bg-\[\#080B11\],
+[data-theme-mode="light"] [class*="bg-\[\#080B11\]"],
+[data-theme-mode="light"] .bg-slate-900,
+[data-theme-mode="light"] [class*="bg-slate-900"],
+[data-theme-mode="light"] .hud-card {
+  background-color: var(--hud-card, #FFFFFF) !important;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* Inner Inputs, Secondary Buttons, Subtle Containers -> Soft Pearl Gray */
+[data-theme-mode="light"] .bg-\[\#0A0D14\],
+[data-theme-mode="light"] [class*="bg-\[\#0A0D14\]"],
+[data-theme-mode="light"] .bg-slate-950:not(.fixed),
+[data-theme-mode="light"] [class*="bg-slate-950"]:not(.fixed),
+[data-theme-mode="light"] .bg-slate-800,
+[data-theme-mode="light"] [class*="bg-slate-800"] {
+  background-color: #F1F5F9 !important;
+}
+
+/* Modal Backdrops stay translucent dark slate */
+[data-theme-mode="light"] .fixed[class*="bg-slate-950"] {
+  background-color: rgba(15, 23, 42, 0.45) !important;
+}
+
+/* Borders -> Clean Soft Slate / Accent Tint */
+[data-theme-mode="light"] .border-slate-800,
+[data-theme-mode="light"] [class*="border-slate-800"],
+[data-theme-mode="light"] .border-slate-700,
+[data-theme-mode="light"] [class*="border-slate-700"] {
+  border-color: #E2E8F0 !important;
+}
+
+/* Primary Text -> Deep Slate for crisp readability on white */
+[data-theme-mode="light"] .text-slate-100,
+[data-theme-mode="light"] .text-slate-200,
+[data-theme-mode="light"] .text-white:not([class*="bg-"]) {
+  color: #0F172A !important;
+}
+
+/* Secondary Text -> Medium Slate */
+[data-theme-mode="light"] .text-slate-300,
+[data-theme-mode="light"] .text-slate-400 {
+  color: #475569 !important;
+}
+
+[data-theme-mode="light"] .text-slate-500,
+[data-theme-mode="light"] .text-slate-600 {
+  color: #64748B !important;
+}
+
+/* Primary Accent Buttons & Active Pills -> White text on Vibrant Accent */
+[data-theme-mode="light"] .bg-\[\#00F0FF\],
+[data-theme-mode="light"] .bg-\[\#00F0FF\] * {
+  color: #FFFFFF !important;
+}
+

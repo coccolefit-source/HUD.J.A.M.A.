@@ -10,8 +10,39 @@ export interface AgentResult {
   details?: any;
 }
 
-// Global audio player reference to allow interrupting
+// Global audio player reference to allow interrupting and mobile iOS audio unlock
 let currentAudio: HTMLAudioElement | null = null;
+let sharedAudioElement: HTMLAudioElement | null = null;
+
+export const DEFAULT_ELEVENLABS_VOICE_ID = '0SKRlkm2sk4SFqESZzly'; // Carlos Pro (Custom connected voice)
+
+// Pre-unlock audio on first user gesture for iOS Safari / Mobile browsers
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    try {
+      if (!sharedAudioElement) {
+        sharedAudioElement = new Audio();
+        sharedAudioElement.preload = 'auto';
+        // Play a tiny silent data URI to unlock the element on iOS
+        sharedAudioElement.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        sharedAudioElement.volume = 0.01;
+        sharedAudioElement.play().then(() => {
+          if (sharedAudioElement) {
+            sharedAudioElement.pause();
+            sharedAudioElement.currentTime = 0;
+            sharedAudioElement.volume = 1.0;
+          }
+        }).catch(() => {});
+      }
+    } catch (e) {
+      // ignore
+    }
+    window.removeEventListener('touchstart', unlockAudio);
+    window.removeEventListener('click', unlockAudio);
+  };
+  window.addEventListener('touchstart', unlockAudio, { passive: true });
+  window.addEventListener('click', unlockAudio, { passive: true });
+}
 
 export function stopCurrentSpeech() {
   if (currentAudio) {
@@ -78,8 +109,34 @@ export function formatSpanishDate(dateStr: string): { diaSemana: string; diaMes:
   }
 }
 
+function playAudioBlob(blob: Blob, fallbackText: string): Promise<void> {
+  const audioUrl = URL.createObjectURL(blob);
+  const audio = sharedAudioElement || new Audio();
+  audio.src = audioUrl;
+  audio.volume = 1.0;
+  currentAudio = audio;
+
+  return new Promise((resolve) => {
+    audio.onended = () => {
+      currentAudio = null;
+      URL.revokeObjectURL(audioUrl);
+      resolve();
+    };
+    audio.onerror = () => {
+      currentAudio = null;
+      URL.revokeObjectURL(audioUrl);
+      fallbackWebSpeech(fallbackText).then(resolve);
+    };
+    audio.play().catch(() => {
+      currentAudio = null;
+      URL.revokeObjectURL(audioUrl);
+      fallbackWebSpeech(fallbackText).then(resolve);
+    });
+  });
+}
+
 /**
- * ElevenLabs Speech Synthesis with seamless Web Speech API fallback
+ * ElevenLabs Speech Synthesis with server proxy + direct client fallback + Web Speech API fallback
  */
 export async function speakWithElevenLabs(text: string): Promise<void> {
   stopCurrentSpeech();
@@ -87,41 +144,73 @@ export async function speakWithElevenLabs(text: string): Promise<void> {
   if (!text || text.trim() === '') return;
 
   try {
-    const savedVoiceId = typeof window !== 'undefined' ? localStorage.getItem('jarvis_elevenlabs_voice_id') : null;
+    const savedVoiceId = typeof window !== 'undefined' ? localStorage.getItem('prime_elevenlabs_voice_id') : null;
+    const selectedVoiceId =
+      savedVoiceId && savedVoiceId !== 'pNInz6obpgDQGcFmaJgB' && savedVoiceId !== 'IKne3meq5aSn9XLyUdCD'
+        ? savedVoiceId
+        : DEFAULT_ELEVENLABS_VOICE_ID;
 
-    const res = await fetch('/api/tts/speak', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voiceId: savedVoiceId || undefined }),
-    });
-
-    const contentType = res.headers.get('content-type') || '';
-
-    // If server returned audio stream directly
-    if (res.ok && contentType.includes('audio/')) {
-      const blob = await res.blob();
-      const audioUrl = URL.createObjectURL(blob);
-      const audio = new Audio(audioUrl);
-      currentAudio = audio;
-      
-      return new Promise((resolve) => {
-        audio.onended = () => {
-          currentAudio = null;
-          URL.revokeObjectURL(audioUrl);
-          resolve();
-        };
-        audio.onerror = () => {
-          currentAudio = null;
-          URL.revokeObjectURL(audioUrl);
-          fallbackWebSpeech(text).then(resolve);
-        };
-        audio.play().catch(() => {
-          fallbackWebSpeech(text).then(resolve);
-        });
+    // 1. Try server proxy route (/api/tts/speak)
+    try {
+      const res = await fetch('/api/tts/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voiceId: selectedVoiceId }),
       });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('audio/')) {
+        const blob = await res.blob();
+        if (blob.size > 100) {
+          return await playAudioBlob(blob, text);
+        }
+      }
+    } catch (serverErr) {
+      // Server route unreachable (e.g. static deployment), continue to direct ElevenLabs call
     }
 
-    // Otherwise fallback to Web Speech Synthesis
+    // 2. Direct ElevenLabs API fallback (for static deployments like Vercel/Netlify or custom key)
+    const clientApiKey =
+      (typeof window !== 'undefined' && localStorage.getItem('prime_elevenlabs_api_key')) ||
+      (import.meta as any).env?.VITE_ELEVENLABS_API_KEY ||
+      (typeof process !== 'undefined' && (process.env as any)?.ELEVENLABS_API_KEY) ||
+      '';
+
+    if (clientApiKey) {
+      const callDirectEleven = async (vid: string) =>
+        fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vid}`, {
+          method: 'POST',
+          headers: {
+            'Accept': 'audio/mpeg',
+            'Content-Type': 'application/json',
+            'xi-api-key': clientApiKey,
+          },
+          body: JSON.stringify({
+            text,
+            model_id: 'eleven_multilingual_v2',
+            voice_settings: {
+              stability: 0.42,
+              similarity_boost: 0.85,
+              style: 0.25,
+              use_speaker_boost: true,
+            },
+          }),
+        });
+
+      let directRes = await callDirectEleven(selectedVoiceId);
+      if (!directRes.ok && (directRes.status === 402 || directRes.status === 403 || directRes.status === 400)) {
+        directRes = await callDirectEleven('onwK4e9ZLuTAKqWW03F9');
+      }
+
+      if (directRes.ok) {
+        const blob = await directRes.blob();
+        if (blob.size > 100) {
+          return await playAudioBlob(blob, text);
+        }
+      }
+    }
+
+    // 3. Otherwise fallback to Web Speech Synthesis
     await fallbackWebSpeech(text);
   } catch (error) {
     await fallbackWebSpeech(text);
@@ -195,6 +284,7 @@ export async function getTodayPendingTasksSummary(projects?: Project[], targetDa
   const todayISO = new Date().toISOString().split('T')[0];
   const targetDate = !targetDateArg || targetDateArg === 'hoy' ? todayISO : targetDateArg;
   let tasksForDate: any[] = [];
+  const seenTaskKeys = new Set<string>();
 
   if (isSupabaseConfigured) {
     try {
@@ -206,39 +296,52 @@ export async function getTodayPendingTasksSummary(projects?: Project[], targetDa
           .eq('user_id', user.id);
 
         if (rows && rows.length > 0) {
-          // STRICTLY EXCLUDE habits ('habits')
+          // STRICTLY EXCLUDE habits
           const validTasks = rows.filter(
             (r: any) => r.type !== 'habit' && r.type !== 'Habit' && typeof r.frequency === 'undefined'
           );
 
-          tasksForDate = validTasks.filter((r: any) => {
+          for (const r of validTasks) {
             const isPending = !r.completed && r.status !== 'completed';
-            if (!isPending) return false;
-            if (targetDate === todayISO) {
-              return r.due_date === todayISO || r.date === todayISO || Boolean(r.is_my_day);
+            if (!isPending) continue;
+
+            const isForTarget = targetDate === todayISO
+              ? (r.due_date === todayISO || r.date === todayISO || Boolean(r.is_my_day) || Boolean(r.is_exec) || !r.due_date || (r.due_date && r.due_date <= todayISO))
+              : (r.due_date === targetDate || r.date === targetDate);
+
+            if (isForTarget) {
+              const key = (r.id ? String(r.id) : '') + '_' + (r.title || '').toLowerCase().trim();
+              if (!seenTaskKeys.has(key)) {
+                seenTaskKeys.add(key);
+                tasksForDate.push({ id: r.id, title: r.title, due_date: r.due_date || r.date });
+              }
             }
-            return r.due_date === targetDate || r.date === targetDate;
-          });
+          }
         }
       }
     } catch (e) {
-      // fallback to local projects
+      // fallback
     }
   }
 
-  // Fallback to local projects tasks if no cloud tasks found or guest mode
-  if (tasksForDate.length === 0 && projects && projects.length > 0) {
+  // Combine with tasks in `projects` array to ensure 100% coverage
+  if (projects && projects.length > 0) {
     for (const p of projects) {
       if (p.tasks && Array.isArray(p.tasks)) {
         for (const t of p.tasks) {
           const isPending = !t.completed && t.status !== 'completed';
           if (!isPending) continue;
-          if (targetDate === todayISO) {
-            if (t.dueDate === todayISO || t.isMyDay) {
-              tasksForDate.push({ title: t.title, due_date: t.dueDate });
+
+          const isForTarget = targetDate === todayISO
+            ? (t.dueDate === todayISO || t.isMyDay || t.isExec || !t.dueDate || (t.dueDate && t.dueDate <= todayISO))
+            : (t.dueDate === targetDate);
+
+          if (isForTarget) {
+            const key = (t.id ? String(t.id) : '') + '_' + (t.title || '').toLowerCase().trim();
+            if (!seenTaskKeys.has(key)) {
+              seenTaskKeys.add(key);
+              tasksForDate.push({ id: t.id, title: t.title, due_date: t.dueDate });
             }
-          } else if (t.dueDate === targetDate) {
-            tasksForDate.push({ title: t.title, due_date: t.dueDate });
           }
         }
       }

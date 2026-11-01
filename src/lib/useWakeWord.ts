@@ -15,12 +15,12 @@ export function useWakeWord({ onWake, isModalOpen }: UseWakeWordOptions) {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         const saved = window.localStorage.getItem(WAKE_WORD_STORAGE_KEY);
-        return saved !== null ? saved === 'true' : true;
+        return saved !== null ? saved === 'true' : false;
       }
     } catch (e) {
       // fallback
     }
-    return true;
+    return false;
   });
 
   const [isClapDetectionActive, setIsClapDetectionActiveState] = useState<boolean>(() => {

@@ -13,11 +13,8 @@ export const HabitHeatmap: React.FC<HabitHeatmapProps> = ({ habits, logs, daysCo
 
   return (
     <div className="bg-[#101827]/80 p-5 rounded-2xl border border-[#06B6D4]/25 shadow-xl backdrop-blur-md space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-bold text-slate-100 font-mono uppercase tracking-wider text-[#06B6D4]">Matriz de Consistencia HUD (Últimos {daysCount} Días)</h3>
-          <p className="text-xs text-slate-400">Visualiza la frecuencia diaria y el mapa térmico por cada hábito</p>
-        </div>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-bold text-slate-100 font-mono uppercase tracking-wider text-[#06B6D4]">Matriz de Consistencia ({daysCount} Días)</h3>
         <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
           <span>Incompleto</span>
           <div className="w-3 h-3 rounded bg-[#0A0D14] border border-[#06B6D4]/30" />

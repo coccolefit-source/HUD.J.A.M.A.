@@ -172,63 +172,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Sticky Top Header Bar - Always visible regardless of screen size */}
-      <header className="sticky top-0 z-40 w-full bg-[#0A0D14]/90 border-b border-[#06B6D4]/25 backdrop-blur-md px-4 py-3 flex items-center justify-between font-mono relative">
-        <div className="flex items-center gap-3 relative z-40">
+      {/* Sticky Top Header Bar - Responsive for Mobile & Desktop */}
+      <header className="sticky top-0 z-40 w-full bg-[#0A0D14]/95 border-b border-[#06B6D4]/25 backdrop-blur-md px-2.5 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-1.5 font-mono relative overflow-hidden">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink relative z-40">
           <button
             type="button"
             onClick={onOpenAuthModal}
-            className="w-9 h-9 rounded-xl bg-[#06B6D4]/15 border border-[#00F0FF]/40 flex items-center justify-center text-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.25)] hover:bg-[#00F0FF]/20 transition-all cursor-pointer relative z-40 pointer-events-auto"
+            className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-[#06B6D4]/15 border border-[#00F0FF]/40 flex items-center justify-center text-[#00F0FF] shadow-[0_0_8px_rgba(0,240,255,0.25)] hover:bg-[#00F0FF]/20 transition-all cursor-pointer relative z-40 pointer-events-auto shrink-0"
             title="Abrir Gestión de Cuenta y HUD"
           >
-            <Target className="w-5 h-5 text-[#00F0FF]" />
+            <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#00F0FF]" />
           </button>
-          <div>
-            <span className="font-black text-slate-100 text-base tracking-wider block font-sans leading-tight">PRIME</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-black text-slate-100 text-sm sm:text-base tracking-wider font-sans leading-none shrink-0">PRIME</span>
             <button
               type="button"
               onClick={onOpenAuthModal}
-              className="flex items-center gap-1.5 mt-0.5 relative z-40 pointer-events-auto cursor-pointer hover:opacity-80 text-left"
+              className="flex items-center gap-1 relative z-40 pointer-events-auto cursor-pointer hover:opacity-80 text-left leading-none"
               title="Abrir Gestión de Cuenta y HUD"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#00F0FF] shadow-[0_0_8px_#00F0FF] animate-pulse shrink-0" />
-              <span className="text-[10px] text-[#00F0FF] font-mono tracking-widest uppercase font-bold truncate max-w-[150px] sm:max-w-none">
-                ● {safeSession.hudName || 'HUD INVITADO'}
+              <span className="text-[10px] sm:text-xs text-[#00F0FF] font-mono tracking-wider uppercase font-bold whitespace-nowrap leading-none">
+                {safeSession.alias || safeSession.hudName?.replace(/^HUD\s+/i, '') || 'INVITADO'}
               </span>
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 relative z-40">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 relative z-40">
           {isWakeWordSupported && onToggleWakeWord && (
             <button
               type="button"
               onClick={() => onToggleWakeWord(!isWakeWordActive)}
-              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-mono transition-all cursor-pointer shadow-sm ${
+              className={`h-6 sm:h-7 flex items-center gap-1 px-1.5 sm:px-2 rounded-md border text-[9px] sm:text-[11px] font-mono transition-all cursor-pointer shadow-sm ${
                 isWakeWordActive
-                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.18)]'
+                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25 shadow-[0_0_10px_rgba(16,185,129,0.18)]'
                   : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:bg-slate-800'
               }`}
               title={isWakeWordActive ? "Detección continua activa. Di 'Prime' (Praim) en cualquier momento para hablar." : "Detección por voz pausada. Clic para activar."}
             >
-              <span className={`w-2 h-2 rounded-full ${isWakeWordActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-              <span className="hidden sm:inline font-bold">"Prime":</span>
-              <span className="font-bold">{isWakeWordActive ? 'ON' : 'OFF'}</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${isWakeWordActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+              <span className="hidden md:inline font-bold">"Prime":</span>
+              <span className="font-bold leading-none">{isWakeWordActive ? 'ON' : 'OFF'}</span>
             </button>
           )}
           {onToggleClapDetection && (
             <button
               type="button"
               onClick={() => onToggleClapDetection(!isClapDetectionActive)}
-              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-mono transition-all cursor-pointer shadow-sm ${
+              className={`h-6 sm:h-7 flex items-center gap-1 px-1.5 sm:px-2 rounded-md border text-[9px] sm:text-[11px] font-mono transition-all cursor-pointer shadow-sm ${
                 isClapDetectionActive
-                  ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/25 shadow-[0_0_12px_rgba(6,182,212,0.18)]'
+                  ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/25 shadow-[0_0_10px_rgba(6,182,212,0.18)]'
                   : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:bg-slate-800'
               }`}
               title={isClapDetectionActive ? "Activación por sonido activa." : "Activación por sonido pausada. Clic para activar."}
             >
-              <span className={`w-2 h-2 rounded-full ${isClapDetectionActive ? 'bg-cyan-400 animate-pulse' : 'bg-slate-500'}`} />
-              <span className="font-bold">{isClapDetectionActive ? 'ON' : 'OFF'}</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${isClapDetectionActive ? 'bg-cyan-400 animate-pulse' : 'bg-slate-500'}`} />
+              <span className="font-bold leading-none">{isClapDetectionActive ? 'ON' : 'OFF'}</span>
             </button>
           )}
           {onManualRefresh && (
@@ -236,47 +236,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
               type="button"
               onClick={onManualRefresh}
               disabled={isSyncing}
-              className="p-2 sm:p-2.5 rounded-xl bg-[#00F0FF]/10 border border-[#00F0FF]/30 text-[#00F0FF] hover:bg-[#00F0FF]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer shadow-[0_0_10px_rgba(0,240,255,0.1)]"
+              className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-[#00F0FF]/10 border border-[#00F0FF]/30 flex items-center justify-center text-[#00F0FF] hover:bg-[#00F0FF]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer shadow-[0_0_8px_rgba(0,240,255,0.1)]"
               title="Sincronizar Datos con la Nube"
             >
-              <RotateCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              <RotateCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isSyncing ? 'animate-spin' : ''}`} />
             </button>
           )}
           <button
             type="button"
             onClick={onOpenAuthModal}
-            className="p-2 sm:p-2.5 rounded-xl bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] hover:bg-[#00F0FF]/25 transition-all relative z-40 pointer-events-auto cursor-pointer flex items-center gap-1.5 shadow-[0_0_10px_rgba(0,240,255,0.15)]"
+            className="hidden sm:flex w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] hover:bg-[#00F0FF]/25 transition-all relative z-40 pointer-events-auto cursor-pointer items-center justify-center shadow-[0_0_8px_rgba(0,240,255,0.15)]"
             title="Acceso al Sistema Táctico / Perfil"
           >
-            <User className="w-4 h-4 text-[#00F0FF]" />
+            <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#00F0FF]" />
           </button>
           <button
             type="button"
             onClick={onPlayWelcomeVoice}
-            className="p-2 sm:p-2.5 rounded-xl bg-[var(--hud-accent,#00F0FF)]/15 border border-[var(--hud-accent,#00F0FF)]/40 text-[var(--hud-accent,#00F0FF)] hover:bg-[var(--hud-accent,#00F0FF)]/25 transition-all relative z-40 pointer-events-auto cursor-pointer shadow-[0_0_10px_rgba(var(--hud-accent-rgb,0,240,255),0.15)]"
+            className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-[var(--hud-accent,#00F0FF)]/15 border border-[var(--hud-accent,#00F0FF)]/40 flex items-center justify-center text-[var(--hud-accent,#00F0FF)] hover:bg-[var(--hud-accent,#00F0FF)]/25 transition-all relative z-40 pointer-events-auto cursor-pointer shadow-[0_0_8px_rgba(var(--hud-accent-rgb,0,240,255),0.15)]"
             title="Activar Asistente PRIME (Voz e IA)"
           >
-            <Volume2 className="w-4 h-4" />
+            <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
           <button
             type="button"
             onClick={onOpenThemeSelector}
-            className="p-2 sm:p-2.5 rounded-xl bg-[#06B6D4]/10 border border-[#06B6D4]/30 text-[#00F0FF] hover:bg-[#06B6D4]/20 transition-colors relative z-40 pointer-events-auto cursor-pointer"
+            className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-[#06B6D4]/10 border border-[#06B6D4]/30 flex items-center justify-center text-[#00F0FF] hover:bg-[#06B6D4]/20 transition-colors relative z-40 pointer-events-auto cursor-pointer"
             title="Cambiar Interfaz Visual"
           >
-            <Palette className="w-4 h-4" />
+            <Palette className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
-          <div className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold">
-            <Flame className="w-3.5 h-3.5 fill-amber-400/20" />
+          <div className="hidden xs:flex sm:flex h-6 sm:h-7 items-center gap-1 px-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] sm:text-xs font-mono font-bold">
+            <Flame className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-amber-400/20" />
             {activeStreak}d
           </div>
           <button
             type="button"
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="p-2 sm:p-2.5 rounded-xl bg-[#101827] border border-[#06B6D4]/40 hover:border-[#00F0FF] text-slate-200 relative z-40 pointer-events-auto cursor-pointer shadow-[0_0_12px_rgba(6,182,212,0.15)] transition-all"
+            className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-[#101827] border border-[#06B6D4]/40 hover:border-[#00F0FF] flex items-center justify-center text-slate-200 relative z-40 pointer-events-auto cursor-pointer shadow-[0_0_8px_rgba(6,182,212,0.15)] transition-all"
             title="Menú de Navegación y Control"
           >
-            {mobileOpen ? <X className="w-5 h-5 text-[#00F0FF]" /> : <Menu className="w-5 h-5" />}
+            {mobileOpen ? <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#00F0FF]" /> : <Menu className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
           </button>
         </div>
       </header>
@@ -302,12 +302,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <Target className="w-5 h-5 text-[#00F0FF] animate-pulse" />
                 </div>
               </div>
-              <div className="min-w-0">
-                <span className="font-black text-slate-100 text-lg tracking-wider block font-sans">PRIME</span>
-                <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-black text-slate-100 text-lg tracking-wider font-sans leading-none shrink-0">PRIME</span>
+                <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-[#00F0FF] shadow-[0_0_8px_#00F0FF] animate-pulse shrink-0" />
-                  <span className="text-[10px] text-[#00F0FF] font-mono tracking-wider font-bold uppercase group-hover:underline truncate">
-                    ● {safeSession.hudName || 'HUD INVITADO'}
+                  <span className="text-[11px] text-[#00F0FF] font-mono tracking-wider font-bold uppercase group-hover:underline whitespace-nowrap">
+                    {safeSession.alias || safeSession.hudName?.replace(/^HUD\s+/i, '') || 'INVITADO'}
                   </span>
                 </div>
               </div>
@@ -342,7 +342,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </div>
 
-            {/* Etiqueta ● HUD INVITADO (ubicada justo ARRIBA de la caja del Rango) */}
+            {/* Etiqueta Alias del Usuario (ubicada justo ARRIBA de la caja del Rango) */}
             <button
               type="button"
               onClick={onOpenAuthModal}
@@ -352,7 +352,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-[#00F0FF] shadow-[0_0_8px_#00F0FF] animate-pulse" />
                 <span className="text-[11px] text-[#00F0FF] font-mono tracking-wider font-bold uppercase group-hover:underline">
-                  ● {safeSession.hudName || 'HUD INVITADO'}
+                  {safeSession.alias || safeSession.hudName?.replace(/^HUD\s+/i, '') || 'INVITADO'}
                 </span>
               </div>
             </button>

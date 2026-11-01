@@ -242,17 +242,14 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
             <Clock className="w-7 h-7 text-[#00FFCC]" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black text-slate-100 tracking-wider">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg md:text-xl font-black text-slate-100 tracking-wider">
                 TEMPORIZADOR TÁCTICO DE ENFOQUE
               </h2>
               <span className="text-[10px] bg-[#00FFCC]/20 text-[#00FFCC] border border-[#00FFCC]/40 px-2 py-0.5 rounded font-bold">
                 ENFOQUE DIRECTO
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Establece la cantidad libre de minutos, activa el hiperfoco y gana +4 XP por cada minuto completado.
-            </p>
           </div>
         </div>
 

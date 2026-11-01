@@ -408,6 +408,27 @@ Si el usuario hace cualquier pregunta, pide información, conocimientos o consej
 });
 
 // 2. ELEVENLABS TTS ENDPOINT
+app.get('/api/tts/voices', async (_req: Request, res: Response) => {
+  try {
+    const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
+    if (!elevenLabsApiKey) {
+      res.json({ voices: [] });
+      return;
+    }
+    const r = await fetch('https://api.elevenlabs.io/v1/voices', {
+      headers: { 'xi-api-key': elevenLabsApiKey },
+    });
+    if (!r.ok) {
+      res.json({ voices: [] });
+      return;
+    }
+    const data = await r.json();
+    res.json({ voices: data.voices || [] });
+  } catch (e) {
+    res.json({ voices: [] });
+  }
+});
+
 app.post('/api/tts/speak', async (req: Request, res: Response) => {
   try {
     const { text, voiceId } = req.body;
@@ -429,27 +450,43 @@ app.post('/api/tts/speak', async (req: Request, res: Response) => {
       return;
     }
 
-    // Default voice: Adam (pNInz6obpgDQGcFmaJgB) or custom
-    const selectedVoiceId = voiceId || 'pNInz6obpgDQGcFmaJgB';
+    // Default to user's ElevenLabs custom Spanish voice: Carlos Pro (0SKRlkm2sk4SFqESZzly)
+    const effectiveVoiceId =
+      voiceId && voiceId !== 'pNInz6obpgDQGcFmaJgB'
+        ? voiceId
+        : process.env.ELEVENLABS_VOICE_ID || '0SKRlkm2sk4SFqESZzly';
 
-    const ttsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${selectedVoiceId}`, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': elevenLabsApiKey,
-        'Content-Type': 'application/json',
-        'Accept': 'audio/mpeg',
-      },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: {
-          stability: 0.35,
-          similarity_boost: 0.85,
-          style: 0.25,
-          use_speaker_boost: true,
+    const requestElevenLabs = async (targetVoiceId: string) => {
+      return fetch(`https://api.elevenlabs.io/v1/text-to-speech/${targetVoiceId}`, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': elevenLabsApiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg',
         },
-      }),
-    });
+        body: JSON.stringify({
+          text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: {
+            stability: 0.42,
+            similarity_boost: 0.85,
+            style: 0.25,
+            use_speaker_boost: true,
+          },
+        }),
+      });
+    };
+
+    let ttsResponse = await requestElevenLabs(effectiveVoiceId);
+
+    // If ElevenLabs returns 402 (Free plan cannot use Voice Library voices via API),
+    // automatically use ElevenLabs 'onwK4e9ZLuTAKqWW03F9' (Daniel - Formal Jarvis-style Multilingual)
+    if (!ttsResponse.ok && (ttsResponse.status === 402 || ttsResponse.status === 403 || ttsResponse.status === 400)) {
+      const fallbackElevenVoiceId = 'onwK4e9ZLuTAKqWW03F9'; // Daniel (Works on Free API tier with eleven_multilingual_v2)
+      if (effectiveVoiceId !== fallbackElevenVoiceId) {
+        ttsResponse = await requestElevenLabs(fallbackElevenVoiceId);
+      }
+    }
 
     if (!ttsResponse.ok) {
       res.json({
