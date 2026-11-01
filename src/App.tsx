@@ -50,6 +50,7 @@ import { fetchCloudIdeas, createCloudIdea, deleteCloudIdea, updateCloudIdea } fr
 import { fetchCloudProjects, createCloudProject, updateCloudProject, deleteCloudProject } from './lib/supabaseProjects';
 import { fetchCloudDailyLogs, upsertCloudDailyLog } from './lib/supabaseDailyLogs';
 import { fetchCloudProductivity, upsertCloudProductivity } from './lib/supabaseProductivity';
+import { fetchCloudReviews, upsertCloudReview } from './lib/supabaseReviews';
 
 function App() {
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -67,6 +68,7 @@ function App() {
   const [currentThemeId, setCurrentThemeId] = useState<ThemeId>(getStoredTheme());
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const isLoadingUserDataRef = useRef<boolean>(false);
 
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const showToast = useCallback((message: string) => {
@@ -903,12 +905,26 @@ function App() {
     }
   };
 
-  const handleSaveReview = (review: OneOnOneReview) => {
-     setReviews(prev => {
-        const idx = prev.findIndex(r => r.id === review.id);
-        if (idx >= 0) return [...prev.slice(0, idx), review, ...prev.slice(idx+1)];
-        return [review, ...prev];
-     });
+  const handleSaveReview = async (review: OneOnOneReview) => {
+    setReviews(prev => {
+       const idx = prev.findIndex(r => r.id === review.id);
+       if (idx >= 0) return [...prev.slice(0, idx), review, ...prev.slice(idx+1)];
+       return [review, ...prev];
+    });
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const res = await upsertCloudReview(review);
+        if (res.success) {
+          showToast("Sesión 1-on-1 guardada en Supabase.");
+        } else {
+          console.warn("Error al guardar sesión 1-on-1 en Supabase:", res.error);
+        }
+      }
+    } catch (e: any) {
+      console.error("Error al guardar sesión 1-on-1:", e);
+    }
   };
 
   const handleFocusSessionComplete = useCallback((minutes: number, xpEarned: number, taskName: string) => {
@@ -950,8 +966,10 @@ function App() {
     }
   }, []);
 
-  const loadAllUserData = useCallback(async (userId: string) => {
+  const loadAllUserData = useCallback(async (userId: string, force = false) => {
     if (!isSupabaseConfigured || !userId) return;
+    if (isLoadingUserDataRef.current && !force) return;
+    isLoadingUserDataRef.current = true;
     try {
       const fetchHabitsWithFallback = async () => {
         const res = await supabase.from('habits').select('*').eq('user_id', userId).order('order', { ascending: true });
@@ -962,13 +980,14 @@ function App() {
         return res;
       };
 
-      const [habitsRes, tasksRes, projectsRes, ideasRes, dailyLogsData, productivityData] = await Promise.all([
+      const [habitsRes, tasksRes, projectsRes, ideasRes, dailyLogsData, productivityData, reviewsData] = await Promise.all([
         fetchHabitsWithFallback(),
         supabase.from('tasks').select('*').eq('user_id', userId),
         supabase.from('projects').select('*').eq('user_id', userId),
         supabase.from('ideas').select('*').eq('user_id', userId),
         fetchCloudDailyLogs(userId),
-        fetchCloudProductivity(userId)
+        fetchCloudProductivity(userId),
+        fetchCloudReviews(userId)
       ]);
 
       if (habitsRes.data) {
@@ -1179,9 +1198,16 @@ function App() {
          }
          setLogs(dailyLogsData);
       }
-      
+
+      if (reviewsData && Array.isArray(reviewsData)) {
+        setReviews(reviewsData);
+      }
+    } catch(err) {
+      console.error("Error al cargar todos los datos de usuario:", err);
+    } finally {
+      isLoadingUserDataRef.current = false;
       setLoading(false);
-    } catch(err) { console.error(err); setLoading(false); }
+    }
   }, []);
 
   const refreshUserData = useCallback(async () => {
