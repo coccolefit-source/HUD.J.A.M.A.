@@ -206,12 +206,12 @@ export const JarvisAssistantModal: React.FC<JarvisAssistantModalProps> = ({
       if (initialCommand && initialCommand.trim()) {
         handleSendCommand(initialCommand.trim());
       } else {
-        // Greet with iconic quote + today's pending tasks
+        // Greet with friendly greeting + today's pending tasks
         if (logs.length === 0) {
           (async () => {
             const { summaryText } = await getTodayPendingTasksSummary(projects);
             if (isCancelled) return;
-            const welcome = `Bienvenido de nuevo, señor. Hemos importado todas las preferencias de la interfaz. Todos los sistemas están en línea y operativos. Estoy a su servicio. ${summaryText}`;
+            const welcome = `¡Hola! Qué gusto verte de nuevo. Estoy listo para ayudarte. ${summaryText}`;
             setLogs([
               {
                 sender: 'jarvis',
@@ -311,7 +311,7 @@ export const JarvisAssistantModal: React.FC<JarvisAssistantModalProps> = ({
       ]);
     } catch (error: any) {
       console.error('Error procesando comando:', error);
-      const errMsg = 'Error al ejecutar la orden táctica, señor.';
+      const errMsg = 'No alcancé a entenderte bien, ¿me lo podrías repetir?';
       setLogs(prev => [...prev, { sender: 'jarvis', text: errMsg, time: timeStr }]);
       speakWithElevenLabs(errMsg);
     } finally {
@@ -652,17 +652,17 @@ export const JarvisAssistantModal: React.FC<JarvisAssistantModalProps> = ({
                   <div className="mb-1.5 flex items-center gap-1">
                     {log.type === 'crear_tarea' && (
                       <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Tarea Creada en Supabase
+                        <CheckCircle2 className="w-3 h-3" /> Tarea Creada
                       </span>
                     )}
                     {log.type === 'consultar_pendientes' && (
                       <span className="px-2 py-0.5 rounded text-[10px] bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center gap-1">
-                        <Layers className="w-3 h-3" /> Consola Central Exec
+                        <Layers className="w-3 h-3" /> Tareas Pendientes
                       </span>
                     )}
                     {log.type === 'navegar' && (
                       <span className="px-2 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center gap-1">
-                        <Navigation className="w-3 h-3" /> Navegación HUD
+                        <Navigation className="w-3 h-3" /> Navegación
                       </span>
                     )}
                   </div>
