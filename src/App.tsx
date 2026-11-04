@@ -1088,22 +1088,6 @@ function App() {
         let projectTasks = allTasks.filter((t) => t.projectId === pIdStr);
         projectTasks.forEach(t => assignedTaskIds.add(t.id));
 
-        // Fallback: Si no hay tareas en la tabla relational tasks para este proyecto pero sí en la columna jsonb r.tasks
-        if (projectTasks.length === 0 && Array.isArray(r.tasks) && r.tasks.length > 0) {
-          projectTasks = r.tasks.map((t: any) => ({
-            id: String(t.id || 'pt-' + Math.random()),
-            projectId: pIdStr,
-            title: t.title || 'Tarea sin título',
-            description: t.description || '',
-            completed: Boolean(t.completed || t.status === 'completed'),
-            dueDate: t.dueDate || t.due_date || undefined,
-            isExec: t.isExec !== undefined ? Boolean(t.isExec) : true,
-            isMyDay: Boolean(t.isMyDay || t.is_my_day),
-            priority: t.priority || 'medium',
-            status: t.status || (t.completed ? 'completed' : 'pending')
-          }));
-        }
-
         loadedProjects.push({
           id: pIdStr,
           title: r.title || 'Proyecto sin título',

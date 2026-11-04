@@ -258,35 +258,29 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     }
   };
 
-  // Handle delete task
-  const handleDeleteTask = async (projectId: string, taskId: string) => {
+  // Handle delete task (0ms Optimistic UI removal + Background Cloud Deletion)
+  const handleDeleteTask = (projectId: string, taskId: string) => {
     const project = (projects || []).find(p => p.id === projectId);
     if (!project) return;
 
-    const res = await deleteCloudTask(taskId);
+    const updatedTasks = project.tasks.filter(t => t.id !== taskId);
+    const completedCount = updatedTasks.filter(t => t.completed).length;
+    const newProgress = updatedTasks.length > 0 
+      ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
+      : 0;
 
-    if (res.success && !res.error) {
-      const updatedTasks = project.tasks.filter(t => t.id !== taskId);
-      const completedCount = updatedTasks.filter(t => t.completed).length;
-      const newProgress = updatedTasks.length > 0 
-        ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
-        : 0;
+    const updatedProject: Project = {
+      ...project,
+      tasks: updatedTasks,
+      progress: newProgress,
+      updatedAt: new Date().toISOString()
+    };
 
-      const updatedProject: Project = {
-        ...project,
-        tasks: updatedTasks,
-        progress: newProgress,
-        updatedAt: new Date().toISOString()
-      };
+    (onSaveProject as any)(updatedProject, { skipTaskSync: true, silent: true });
 
-      onSaveProject(updatedProject);
-    } else {
-      const errorMsg = typeof res.error === 'string' 
-        ? res.error 
-        : (res.error?.message || res.error?.details || 'Error al eliminar tarea de Supabase');
-      console.error('Error al eliminar tarea en Supabase:', res.error);
-      alert(`Error en Supabase: ${errorMsg}`);
-    }
+    deleteCloudTask(taskId, projectId).catch(err => {
+      console.error('Error al eliminar tarea en Supabase:', err);
+    });
   };
 
   // Handle Quick Add Task

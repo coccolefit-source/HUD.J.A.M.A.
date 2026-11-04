@@ -227,7 +227,7 @@ export async function updateCloudTask(
 /**
  * 4. Eliminar tarea en Supabase
  */
-export async function deleteCloudTask(taskId: string): Promise<{ success: boolean; data?: any; error?: any }> {
+export async function deleteCloudTask(taskId: string, projectId?: string): Promise<{ success: boolean; data?: any; error?: any }> {
   if (!isSupabaseConfigured || String(taskId).startsWith('guest_')) {
     return { success: true };
   }
@@ -247,6 +247,27 @@ export async function deleteCloudTask(taskId: string): Promise<{ success: boolea
     if (error) {
       console.error('Error al eliminar tarea de Supabase:', error);
       return { success: false, error };
+    }
+
+    if (projectId && projectId !== 'proj-other' && !String(projectId).startsWith('proj-temp-')) {
+      try {
+        const { data: projData } = await supabase
+          .from('projects')
+          .select('tasks')
+          .eq('id', projectId)
+          .single();
+
+        if (projData && Array.isArray(projData.tasks)) {
+          const updatedJsonbTasks = projData.tasks.filter((t: any) => String(t.id) !== String(taskId));
+          await supabase
+            .from('projects')
+            .update({ tasks: updatedJsonbTasks })
+            .eq('id', projectId)
+            .eq('user_id', user.id);
+        }
+      } catch (jsonErr) {
+        console.warn("Advertencia al limpiar JSONB de proyecto:", jsonErr);
+      }
     }
 
     return { success: true, data };
