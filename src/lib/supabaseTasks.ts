@@ -331,15 +331,7 @@ export async function syncProjectTasksToCloud(project: Project): Promise<Project
       }
     }
 
-    // 2. Identificar tareas que existían en Supabase para este proyecto pero ya no están en project.tasks -> Eliminar de Supabase
-    for (const cloudTaskId of dbTaskIdsInCloud) {
-      if (!currentTaskIdsInClient.has(cloudTaskId)) {
-        console.log(`Eliminando tarea removida de Supabase: ${cloudTaskId}`);
-        await deleteCloudTask(cloudTaskId);
-      }
-    }
-
-    // 3. Sincronizar columna tasks (jsonb) en la tabla projects de Supabase para reflejar los cambios
+    // 2. Sincronizar columna tasks (jsonb) en la tabla projects de Supabase para reflejar los cambios
     if (targetDbProjectId) {
       await supabase
         .from('projects')

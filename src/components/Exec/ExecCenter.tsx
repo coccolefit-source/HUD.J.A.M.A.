@@ -392,7 +392,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
         updatedAt: new Date().toISOString()
       };
 
-      onSaveProject(updatedProject);
+      (onSaveProject as any)(updatedProject, { skipTaskSync: true, silent: true });
 
       setNewTaskTitle('');
       setNewTaskDueDate('');
