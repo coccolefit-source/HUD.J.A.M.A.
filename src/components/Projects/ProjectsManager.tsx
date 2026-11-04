@@ -56,21 +56,32 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Real Projects (excluding virtual unassigned task container)
+  const realProjects = useMemo(() => {
+    return (projects || []).filter(
+      p => p.id !== 'proj-other' && 
+           p.title !== 'Sin Proyecto / Otros' && 
+           p.title !== 'Otras Tareas Tácticas' &&
+           p.title !== 'Sin Proyecto (Tareas Generales)' &&
+           p.title !== 'Otros'
+    );
+  }, [projects]);
+
   // Stats
   const stats = useMemo(() => {
-    const total = (projects || []).length;
-    const inProgress = (projects || []).filter(p => p.status === 'En Progreso').length;
-    const completed = (projects || []).filter(p => p.status === 'Completado').length;
+    const total = realProjects.length;
+    const inProgress = realProjects.filter(p => p.status === 'En Progreso').length;
+    const completed = realProjects.filter(p => p.status === 'Completado').length;
     const avgProgress = total > 0 
-      ? Math.round((projects || []).reduce((acc, p) => acc + p.progress, 0) / total) 
+      ? Math.round(realProjects.reduce((acc, p) => acc + p.progress, 0) / total) 
       : 0;
 
     return { total, inProgress, completed, avgProgress };
-  }, [projects]);
+  }, [realProjects]);
 
   // Filtered Projects
   const filteredProjects = useMemo(() => {
-    return (projects || []).filter(p => {
+    return realProjects.filter(p => {
       const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             (p.category && p.category.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -79,7 +90,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
       return matchesSearch && matchesStatus && matchesPriority;
     });
-  }, [projects, searchQuery, statusFilter, priorityFilter]);
+  }, [realProjects, searchQuery, statusFilter, priorityFilter]);
 
   // Open Modal
   const handleOpenAddModal = () => {
@@ -537,7 +548,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
         <div className="p-8 text-center bg-[#101827]/60 border border-dashed border-slate-800 rounded-2xl font-mono text-slate-500 space-y-3">
           <FolderKanban className="w-10 h-10 mx-auto text-slate-600" />
           <p className="text-xs font-bold text-slate-400">
-            {projects.length === 0 ? "No hay proyectos activos" : "No se encontraron proyectos con los filtros aplicados."}
+            {realProjects.length === 0 ? "No hay proyectos activos" : "No se encontraron proyectos con los filtros aplicados."}
           </p>
           <button
             type="button"

@@ -32,7 +32,9 @@ export async function fetchCloudTasks(userId?: string): Promise<{ task: ProjectT
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
-      .eq('user_id', targetUserId);
+      .eq('user_id', targetUserId)
+      .order('created_at', { ascending: false })
+      .limit(2000);
 
     if (error) {
       console.error('Error al cargar tareas desde Supabase:', error);
@@ -53,16 +55,17 @@ export async function fetchCloudTasks(userId?: string): Promise<{ task: ProjectT
       const isExecCalculated = row.is_exec !== undefined && row.is_exec !== null
         ? Boolean(row.is_exec)
         : true;
+      const isCompleted = Boolean(row.is_completed !== undefined ? row.is_completed : (row.completed || row.status === 'completed'));
 
       return {
         task: {
           id: String(row.id),
           title: row.title || 'Tarea sin título',
           description: row.description || '',
-          completed: Boolean(row.completed || row.status === 'completed'),
+          completed: isCompleted,
           dueDate: row.due_date || row.date || undefined,
           priority: row.priority || 'medium',
-          status: row.status || (row.completed ? 'completed' : 'pending'),
+          status: row.status || (isCompleted ? 'completed' : 'pending'),
           isExec: isExecCalculated,
           isMyDay: isMyDayCalculated
         },
@@ -97,6 +100,7 @@ export async function createCloudTask(task: TaskCloudPayload): Promise<{ success
       title: task.title ? task.title.trim() : 'Nueva Tarea',
       description: task.description || '',
       completed: Boolean(task.completed),
+      is_completed: Boolean(task.completed),
       priority: task.priority || 'medium',
       status: task.completed ? 'completed' : (task.status || 'pending'),
       due_date: task.dueDate || todayISO,
@@ -108,10 +112,12 @@ export async function createCloudTask(task: TaskCloudPayload): Promise<{ success
     console.log("PAYLOAD A INSERTAR EN SUPABASE (tasks):", payload);
     let { data, error } = await supabase.from('tasks').insert([payload]).select();
 
-    if (error && (error.message?.includes('is_exec') || error.message?.includes('is_my_day'))) {
+    if (error && (error.message?.includes('is_exec') || error.message?.includes('is_my_day') || error.message?.includes('is_completed') || error.message?.includes('completed'))) {
       const fallbackPayload = { ...payload };
-      delete fallbackPayload.is_exec;
-      delete fallbackPayload.is_my_day;
+      if (error.message?.includes('is_exec')) delete fallbackPayload.is_exec;
+      if (error.message?.includes('is_my_day')) delete fallbackPayload.is_my_day;
+      if (error.message?.includes('is_completed')) delete fallbackPayload.is_completed;
+      if (error.message?.includes('column "completed"')) delete fallbackPayload.completed;
       const retry = await supabase.from('tasks').insert([fallbackPayload]).select();
       data = retry.data;
       error = retry.error;
@@ -163,6 +169,7 @@ export async function updateCloudTask(
 
     if (updates.completed !== undefined) {
       updatePayload.completed = updates.completed;
+      updatePayload.is_completed = updates.completed;
       updatePayload.status = updates.completed ? 'completed' : 'pending';
     }
     if (updates.title !== undefined) {
@@ -199,11 +206,13 @@ export async function updateCloudTask(
       .update(updatePayload)
       .eq('id', taskId);
 
-    if (error && (error.message?.includes('is_exec') || error.message?.includes('is_my_day') || error.message?.includes('updated_at'))) {
+    if (error && (error.message?.includes('is_exec') || error.message?.includes('is_my_day') || error.message?.includes('updated_at') || error.message?.includes('is_completed') || error.message?.includes('completed'))) {
       const fallbackPayload = { ...updatePayload };
-      delete fallbackPayload.is_exec;
-      delete fallbackPayload.is_my_day;
-      delete fallbackPayload.updated_at;
+      if (error.message?.includes('is_exec')) delete fallbackPayload.is_exec;
+      if (error.message?.includes('is_my_day')) delete fallbackPayload.is_my_day;
+      if (error.message?.includes('updated_at')) delete fallbackPayload.updated_at;
+      if (error.message?.includes('is_completed')) delete fallbackPayload.is_completed;
+      if (error.message?.includes('column "completed"')) delete fallbackPayload.completed;
       const retry = await supabase
         .from('tasks')
         .update(fallbackPayload)

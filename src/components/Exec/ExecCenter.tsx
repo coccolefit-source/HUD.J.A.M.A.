@@ -305,12 +305,12 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
 
       let targetProj: Project | undefined;
       if (targetProjectId === 'none' || !targetProjectId) {
-        targetProj = (projects || []).find(p => p.id === 'proj-other' || p.title === 'Sin Proyecto / Otros' || p.title === 'Otros');
+        targetProj = (projects || []).find(p => p.id === 'proj-other' || p.title === 'Sin Proyecto (Tareas Generales)' || p.title === 'Sin Proyecto / Otros' || p.title === 'Otras Tareas Tácticas');
         if (!targetProj) {
           targetProj = {
             id: 'proj-other',
-            title: 'Sin Proyecto / Otros',
-            description: 'Contenedor de tareas independientes y sueltas',
+            title: 'Sin Proyecto (Tareas Generales)',
+            description: 'Contenedor de tareas independientes y generales',
             status: 'En Progreso',
             priority: 'Media',
             startDate: todayISO,
@@ -322,10 +322,10 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
       } else {
         targetProj = (projects || []).find(p => p.id === targetProjectId);
         if (!targetProj) {
-          targetProj = (projects || []).find(p => p.id === 'proj-other' || p.title === 'Sin Proyecto / Otros') || {
+          targetProj = (projects || []).find(p => p.id === 'proj-other') || {
             id: 'proj-other',
-            title: 'Sin Proyecto / Otros',
-            description: 'Contenedor de tareas independientes y sueltas',
+            title: 'Sin Proyecto (Tareas Generales)',
+            description: 'Contenedor de tareas independientes y generales',
             status: 'En Progreso',
             priority: 'Media',
             startDate: todayISO,

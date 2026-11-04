@@ -517,11 +517,9 @@ function App() {
   };
 
   const handleDeleteProject = async (projectId: string) => {
+    if (projectId === 'proj-other') return;
     try {
       setProjects(prev => prev.filter(p => p.id !== projectId));
-      if (projectId === 'proj-other') {
-        localStorage.setItem('hide_proj_other', 'true');
-      }
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -982,7 +980,7 @@ function App() {
 
       const [habitsRes, tasksRes, projectsRes, ideasRes, dailyLogsData, productivityData, reviewsData] = await Promise.all([
         fetchHabitsWithFallback(),
-        supabase.from('tasks').select('*').eq('user_id', userId),
+        supabase.from('tasks').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(2000),
         supabase.from('projects').select('*').eq('user_id', userId),
         supabase.from('ideas').select('*').eq('user_id', userId),
         fetchCloudDailyLogs(userId),
@@ -1064,17 +1062,21 @@ function App() {
             ? Boolean(t.is_exec)
             : true;
 
+          const isCompleted = Boolean(
+            t.is_completed !== undefined ? t.is_completed : (t.completed || t.status === 'completed')
+          );
+
           allTasks.push({
             id: tId,
             projectId: pId,
             title: t.title || 'Tarea sin título',
             description: t.description || '',
-            completed: Boolean(t.completed || t.status === 'completed'),
+            completed: isCompleted,
             dueDate: t.due_date || t.date || undefined,
             isExec: isExecCalculated,
             isMyDay: isMyDayCalculated,
             priority: t.priority || 'medium',
-            status: t.status || (t.completed ? 'completed' : 'pending')
+            status: t.status || (isCompleted ? 'completed' : 'pending')
           });
         }
       }
@@ -1112,20 +1114,19 @@ function App() {
         });
       }
 
-      // Collect unassigned / general tasks into virtual 'proj-other' container so no tasks are lost
-      const isProjOtherHidden = localStorage.getItem('hide_proj_other') === 'true';
+      // Always collect unassigned / general tasks into virtual 'proj-other' container so no tasks are lost
       const unassignedTasks = allTasks.filter(t => !assignedTaskIds.has(t.id));
-      if (unassignedTasks.length > 0 && !isProjOtherHidden) {
+      if (unassignedTasks.length > 0) {
         let otherProject = loadedProjects.find(p => p.id === 'proj-other');
         if (!otherProject) {
           otherProject = {
             id: 'proj-other',
-            title: 'Otras Tareas Tácticas',
+            title: 'Sin Proyecto (Tareas Generales)',
             description: 'Contenedor de tareas generales del sistema',
             status: 'En Progreso',
             priority: 'Media',
             progress: 0,
-            startDate: new Date().toISOString().split('T')[0],
+            startDate: todayISO,
             tasks: [],
             createdAt: new Date().toISOString()
           };
@@ -1284,7 +1285,11 @@ function App() {
             // Directly update task completed status in local state for instant real-time feedback across devices
             if ((payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') && payload.new) {
               const updatedTaskId = String(payload.new.id);
-              const newCompleted = Boolean(payload.new.completed || payload.new.status === 'completed');
+              const newCompleted = Boolean(
+                payload.new.is_completed !== undefined 
+                  ? payload.new.is_completed 
+                  : (payload.new.completed || payload.new.status === 'completed')
+              );
               const newStatus = payload.new.status || (newCompleted ? 'completed' : 'pending');
 
               setProjects(prevProjects => {
@@ -1343,6 +1348,7 @@ function App() {
   }, [loadAllUserData, isAuthenticated]);
 
   useEffect(() => {
+    localStorage.removeItem('hide_proj_other');
     if (!isSupabaseConfigured) {
         setLoading(false);
         return;
