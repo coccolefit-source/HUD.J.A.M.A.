@@ -47,7 +47,8 @@ import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { fetchCloudTasks, createCloudTask, updateCloudTask, deleteCloudTask, syncProjectTasksToCloud } from './lib/supabaseTasks';
 import { fetchCloudHabits, createCloudHabit, updateCloudHabit, deleteCloudHabit } from './lib/supabaseHabits';
 import { fetchCloudIdeas, createCloudIdea, deleteCloudIdea, updateCloudIdea } from './lib/supabaseIdeas';
-import { fetchCloudProjects, createCloudProject, updateCloudProject, deleteCloudProject } from './lib/supabaseProjects';
+import { fetchCloudProjects, createCloudProject, updateCloudProject, deleteCloudProject, getLocalProjectPhasesBackup, saveLocalProjectPhasesBackup } from './lib/supabaseProjects';
+import { createDefaultProjectPhases, ensureProjectPhases, calculateProjectProgress } from './utils/projectTemplates';
 import { fetchCloudDailyLogs, upsertCloudDailyLog } from './lib/supabaseDailyLogs';
 import { fetchCloudProductivity, upsertCloudProductivity } from './lib/supabaseProductivity';
 import { fetchCloudReviews, upsertCloudReview } from './lib/supabaseReviews';
@@ -400,13 +401,15 @@ function App() {
         return;
       }
 
+      const defaultPhases = createDefaultProjectPhases();
       const projectPayload = {
         title: idea.title,
         description: idea.notes || (idea as any).description || '',
         user_id: user.id,
         status: 'pending',
         priority: 'Media',
-        progress: 0
+        progress: 0,
+        phases: defaultPhases
       };
 
       const [projectRes, ideaRes] = await Promise.all([
@@ -423,7 +426,8 @@ function App() {
       const newProject: Project = { 
         ...projectRes.data, 
         id: String(projectRes.data.id), 
-        tasks: [] 
+        tasks: [],
+        phases: defaultPhases
       };
 
       setProjects(prev => [newProject, ...prev]);
@@ -437,13 +441,18 @@ function App() {
   };
 
   const handleSaveProject = async (project: Project, options?: { skipTaskSync?: boolean; silent?: boolean; syncDeletions?: boolean }) => {
+    const normalizedProject: Project = {
+      ...project,
+      progress: calculateProjectProgress(project.tasks, project.phases)
+    };
+
     // 1. Instant Optimistic UI Update (0ms latency)
     setProjects(prev => {
-      const exists = prev.some(p => p.id === project.id);
+      const exists = prev.some(p => p.id === normalizedProject.id);
       if (exists) {
-        return prev.map(p => p.id === project.id ? project : p);
+        return prev.map(p => p.id === normalizedProject.id ? normalizedProject : p);
       }
-      return [project, ...prev];
+      return [normalizedProject, ...prev];
     });
 
     // 2. Background Cloud Sync (protected by save lock so Realtime does not wipe subtasks mid-save)
@@ -455,10 +464,14 @@ function App() {
       const taskErrors: string[] = [];
 
       // Check if virtual project container 'proj-other'
-      if (project.id === 'proj-other') {
+      if (normalizedProject.id === 'proj-other') {
         if (!options?.skipTaskSync) {
-          const syncedProject = await syncProjectTasksToCloud(project, { errorsOut: taskErrors });
-          setProjects(prev => prev.map(p => p.id === 'proj-other' ? syncedProject : p));
+          const syncedProject = await syncProjectTasksToCloud(normalizedProject, { errorsOut: taskErrors });
+          const finalSynced = {
+            ...syncedProject,
+            progress: calculateProjectProgress(syncedProject.tasks, syncedProject.phases)
+          };
+          setProjects(prev => prev.map(p => p.id === 'proj-other' ? finalSynced : p));
         }
         if (taskErrors.length > 0) {
           alert(`Algunas tareas no se pudieron guardar en Supabase:\n${taskErrors.join('\n')}`);
@@ -469,29 +482,34 @@ function App() {
       }
 
       // Check if project has an existing DB id (not a temp client prefix)
-      const isExistingInDb = project.id && 
-        !String(project.id).startsWith('proj-temp-') && 
-        !String(project.id).startsWith('proj-') &&
-        !String(project.id).startsWith('guest_');
+      const isExistingInDb = normalizedProject.id && 
+        !String(normalizedProject.id).startsWith('proj-temp-') && 
+        !String(normalizedProject.id).startsWith('proj-') &&
+        !String(normalizedProject.id).startsWith('guest_');
 
       if (isExistingInDb) {
         // Sync subtasks into public.tasks FIRST so Realtime on projects never observes stale tasks
-        let syncedProject = project;
+        let syncedProject = normalizedProject;
         if (!options?.skipTaskSync) {
-          syncedProject = await syncProjectTasksToCloud(project, {
+          const rawSynced = await syncProjectTasksToCloud(normalizedProject, {
             syncDeletions: options?.syncDeletions,
             errorsOut: taskErrors
           });
-          setProjects(prev => prev.map(p => p.id === project.id ? syncedProject : p));
+          syncedProject = {
+            ...rawSynced,
+            progress: calculateProjectProgress(rawSynced.tasks, rawSynced.phases)
+          };
+          setProjects(prev => prev.map(p => p.id === normalizedProject.id ? syncedProject : p));
         }
 
-        const res = await updateCloudProject(project.id, {
+        const res = await updateCloudProject(normalizedProject.id, {
           title: syncedProject.title,
           description: syncedProject.description,
           status: syncedProject.status,
           priority: syncedProject.priority,
           progress: syncedProject.progress,
-          tasks: syncedProject.tasks || []
+          tasks: syncedProject.tasks || [],
+          phases: syncedProject.phases ? ensureProjectPhases(syncedProject.phases) : undefined
         });
 
         if (!res.success || res.error) {
@@ -505,13 +523,16 @@ function App() {
           showToast("Proyecto actualizado en Supabase.");
         }
       } else {
+        const initialPhases = ensureProjectPhases(normalizedProject.phases);
+        const initialProgress = calculateProjectProgress(normalizedProject.tasks, initialPhases);
         const res = await createCloudProject({
-          title: project.title,
-          description: project.description,
-          status: project.status,
-          priority: project.priority,
-          progress: project.progress,
-          tasks: []
+          title: normalizedProject.title,
+          description: normalizedProject.description,
+          status: normalizedProject.status,
+          priority: normalizedProject.priority,
+          progress: initialProgress,
+          tasks: [],
+          phases: initialPhases
         });
 
         if (!res.success || !res.data) {
@@ -521,13 +542,19 @@ function App() {
 
         const realId = String(res.data.id);
         const createdProj = {
-          ...project,
+          ...normalizedProject,
           id: realId,
+          phases: initialPhases,
+          progress: initialProgress,
           createdAt: res.data.created_at || new Date().toISOString()
         };
 
-        const syncedProject = await syncProjectTasksToCloud(createdProj, { errorsOut: taskErrors });
-        setProjects(prev => [syncedProject, ...prev.filter(p => p.id !== project.id && p.id !== realId)]);
+        const rawSynced = await syncProjectTasksToCloud(createdProj, { errorsOut: taskErrors });
+        const syncedProject = {
+          ...rawSynced,
+          progress: calculateProjectProgress(rawSynced.tasks, rawSynced.phases)
+        };
+        setProjects(prev => [syncedProject, ...prev.filter(p => p.id !== normalizedProject.id && p.id !== realId)]);
         if (taskErrors.length > 0) {
           alert(`Proyecto creado, pero hubo un error al guardar subtareas en Supabase:\n${taskErrors.join('\n')}`);
         } else if (!options?.silent) {
@@ -577,10 +604,7 @@ function App() {
       if (proj.id !== projectId) return proj;
       previousProjectSnapshot = proj;
       const updatedTasks = proj.tasks.filter(t => String(t.id) !== taskIdStr);
-      const completedCount = updatedTasks.filter(t => t.completed).length;
-      const newProgress = updatedTasks.length > 0
-        ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
-        : 0;
+      const newProgress = calculateProjectProgress(updatedTasks, proj.phases);
       return {
         ...proj,
         tasks: updatedTasks,
@@ -615,10 +639,7 @@ function App() {
         !String(projectId).startsWith('guest_')
       ) {
         const remainingTasks = previousProjectSnapshot.tasks.filter(t => String(t.id) !== taskIdStr);
-        const completedCount = remainingTasks.filter(t => t.completed).length;
-        const newProgress = remainingTasks.length > 0
-          ? Math.min(100, Math.round((completedCount / remainingTasks.length) * 100))
-          : 0;
+        const newProgress = calculateProjectProgress(remainingTasks, previousProjectSnapshot.phases);
 
         await updateCloudProject(projectId, {
           progress: newProgress,
@@ -1201,26 +1222,37 @@ function App() {
         let projectTasks = allTasks.filter((t) => t.projectId === pIdStr);
         projectTasks.forEach(t => assignedTaskIds.add(t.id));
 
+        const hasCloudPhases = Array.isArray(r.phases) && r.phases.length > 0;
+        const resolvedPhases = hasCloudPhases
+          ? ensureProjectPhases(r.phases)
+          : (getLocalProjectPhasesBackup(pIdStr) || createDefaultProjectPhases());
+        if (hasCloudPhases) {
+          saveLocalProjectPhasesBackup(pIdStr, resolvedPhases);
+        }
+
+        const mappedTasks = projectTasks.map(t => ({ 
+          id: t.id, 
+          title: t.title, 
+          completed: t.completed, 
+          dueDate: t.dueDate,
+          isExec: t.isExec,
+          isMyDay: t.isMyDay,
+          description: t.description,
+          priority: t.priority,
+          status: t.status
+        }));
+
         loadedProjects.push({
           id: pIdStr,
           title: r.title || 'Proyecto sin título',
           description: r.description || '',
           status: r.status || 'Planificación',
           priority: r.priority || 'Media',
-          progress: typeof r.progress === 'number' ? r.progress : 0,
+          progress: calculateProjectProgress(mappedTasks, resolvedPhases),
           startDate: r.start_date || todayISO,
           targetDate: r.end_date || r.target_date || undefined,
-          tasks: projectTasks.map(t => ({ 
-            id: t.id, 
-            title: t.title, 
-            completed: t.completed, 
-            dueDate: t.dueDate,
-            isExec: t.isExec,
-            isMyDay: t.isMyDay,
-            description: t.description,
-            priority: t.priority,
-            status: t.status
-          })),
+          tasks: mappedTasks,
+          phases: resolvedPhases,
           createdAt: r.created_at || new Date().toISOString()
         });
       }
@@ -1262,8 +1294,7 @@ function App() {
           }
         }
 
-        const compCount = otherProject.tasks.filter(t => t.completed).length;
-        otherProject.progress = otherProject.tasks.length > 0 ? Math.round((compCount / otherProject.tasks.length) * 100) : 0;
+        otherProject.progress = calculateProjectProgress(otherProject.tasks);
       }
 
       setProjects(loadedProjects);
@@ -1421,16 +1452,13 @@ function App() {
                     return t;
                   });
 
-                  const completedCount = updatedTasks.filter(t => t.completed).length;
-                  const newProgress = updatedTasks.length > 0
-                    ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
-                    : proj.progress;
+                  const newProgress = calculateProjectProgress(updatedTasks, proj.phases);
 
                   return {
                     ...proj,
                     tasks: updatedTasks,
                     progress: newProgress,
-                    status: newProgress === 100 ? 'Completado' : (proj.status === 'Completado' ? 'En Progreso' : proj.status)
+                    status: updatedTasks.length > 0 && newProgress === 100 ? 'Completado' : (proj.status === 'Completado' ? 'En Progreso' : proj.status)
                   };
                 });
               });
@@ -1439,10 +1467,7 @@ function App() {
               setProjects(prevProjects => prevProjects.map(proj => {
                 if (!proj.tasks.some(t => String(t.id) === deletedTaskId)) return proj;
                 const updatedTasks = proj.tasks.filter(t => String(t.id) !== deletedTaskId);
-                const completedCount = updatedTasks.filter(t => t.completed).length;
-                const newProgress = updatedTasks.length > 0
-                  ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
-                  : 0;
+                const newProgress = calculateProjectProgress(updatedTasks, proj.phases);
                 return { ...proj, tasks: updatedTasks, progress: newProgress };
               }));
             }

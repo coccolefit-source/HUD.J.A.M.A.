@@ -22,6 +22,7 @@ import { Project, ProjectTask, ProjectPriority } from '../../types';
 import { getTodayISO, formatDateToISO } from '../../utils/dateUtils';
 import { createCloudTask, updateCloudTask, deleteCloudTask } from '../../lib/supabaseTasks';
 import { supabase } from '../../lib/supabase';
+import { calculateProjectProgress } from '../../utils/projectTemplates';
 
 interface ExecCenterProps {
   projects: Project[];
@@ -171,10 +172,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     const updatedTasks = project.tasks.map(t => 
       t.id === taskId ? { ...t, completed: newCompleted, status: newCompleted ? 'completed' : 'pending' } : t
     );
-    const completedCount = updatedTasks.filter(t => t.completed).length;
-    const newProgress = updatedTasks.length > 0 
-      ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
-      : project.progress;
+    const newProgress = calculateProjectProgress(updatedTasks, project.phases);
 
     const updatedProject: Project = {
       ...project,
@@ -278,10 +276,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     }
 
     const updatedTasks = project.tasks.filter(t => t.id !== taskId);
-    const completedCount = updatedTasks.filter(t => t.completed).length;
-    const newProgress = updatedTasks.length > 0 
-      ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
-      : 0;
+    const newProgress = calculateProjectProgress(updatedTasks, project.phases);
 
     const updatedProject: Project = {
       ...project,
@@ -386,8 +381,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
       };
 
       const updatedTasks = [...(targetProj.tasks || []), newTask];
-      const completedCount = updatedTasks.filter(t => t.completed).length;
-      const newProgress = Math.min(100, Math.round((completedCount / updatedTasks.length) * 100));
+      const newProgress = calculateProjectProgress(updatedTasks, targetProj.phases);
 
       const updatedProject: Project = {
         ...targetProj,
@@ -427,10 +421,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
 
     // Remove task from source project
     const updatedSourceTasks = sourceProject.tasks.filter(t => t.id !== taskId);
-    const sourceCompletedCount = updatedSourceTasks.filter(t => t.completed).length;
-    const sourceNewProgress = updatedSourceTasks.length > 0 
-      ? Math.min(100, Math.round((sourceCompletedCount / updatedSourceTasks.length) * 100))
-      : 0;
+    const sourceNewProgress = calculateProjectProgress(updatedSourceTasks, sourceProject.phases);
 
     const updatedSourceProject: Project = {
       ...sourceProject,
@@ -458,8 +449,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
 
     if (destProject) {
       const updatedDestTasks = [...(destProject.tasks || []), targetTask];
-      const destCompletedCount = updatedDestTasks.filter(t => t.completed).length;
-      const destNewProgress = Math.min(100, Math.round((destCompletedCount / updatedDestTasks.length) * 100));
+      const destNewProgress = calculateProjectProgress(updatedDestTasks, destProject.phases);
 
       const updatedDestProject: Project = {
         ...destProject,

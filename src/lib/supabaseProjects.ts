@@ -1,5 +1,32 @@
 import { supabase, isSupabaseConfigured } from './supabase';
-import { Project } from '../types';
+import { Project, ProjectPhase } from '../types';
+import { ensureProjectPhases, calculateProjectProgress } from '../utils/projectTemplates';
+
+const PHASES_BACKUP_PREFIX = 'prime_project_phases_';
+
+export function saveLocalProjectPhasesBackup(projectId: string, phases: ProjectPhase[]) {
+  try {
+    if (projectId) {
+      localStorage.setItem(`${PHASES_BACKUP_PREFIX}${projectId}`, JSON.stringify(phases));
+    }
+  } catch (e) {
+    // ignore storage quota errors
+  }
+}
+
+export function getLocalProjectPhasesBackup(projectId: string): ProjectPhase[] | null {
+  try {
+    const raw = localStorage.getItem(`${PHASES_BACKUP_PREFIX}${projectId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return ensureProjectPhases(parsed);
+    }
+  } catch (e) {
+    // ignore parse errors
+  }
+  return null;
+}
 
 export interface ProjectCloudPayload {
   id?: string;
@@ -10,6 +37,7 @@ export interface ProjectCloudPayload {
   progress?: number;
   category?: string;
   tasks?: any[];
+  phases?: ProjectPhase[];
 }
 
 export async function createCloudProject(project: ProjectCloudPayload): Promise<{ success: boolean; data?: any; error?: any }> {
@@ -24,6 +52,7 @@ export async function createCloudProject(project: ProjectCloudPayload): Promise<
       return { success: false, error: userAuthError || 'Usuario no autenticado' };
     }
 
+    const resolvedPhases = ensureProjectPhases(project.phases);
     const payload: Record<string, any> = {
       title: project.title,
       description: project.description || '',
@@ -31,15 +60,28 @@ export async function createCloudProject(project: ProjectCloudPayload): Promise<
       priority: project.priority || 'Media',
       progress: project.progress || 0,
       tasks: project.tasks || [],
+      phases: resolvedPhases,
       user_id: user.id
     };
 
     console.log("PAYLOAD A INSERTAR (projects):", payload);
-    const { data, error } = await supabase.from('projects').insert([payload]).select();
+    let { data, error } = await supabase.from('projects').insert([payload]).select();
+
+    if (error && String(error.message || '').includes('phases')) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.phases;
+      const retry = await supabase.from('projects').insert([fallbackPayload]).select();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error("ERROR EN INSERT [projects]:", error);
       return { success: false, error };
+    }
+
+    if (data && data[0]?.id) {
+      saveLocalProjectPhasesBackup(String(data[0].id), resolvedPhases);
     }
 
     console.log("Proyecto insertado exitosamente en Supabase:", data);
@@ -69,13 +111,33 @@ export async function updateCloudProject(
     if (updates.priority !== undefined) updatePayload.priority = updates.priority;
     if (updates.progress !== undefined) updatePayload.progress = updates.progress;
     if (updates.tasks !== undefined) updatePayload.tasks = updates.tasks;
+    if (updates.phases !== undefined) {
+      updatePayload.phases = updates.phases;
+      saveLocalProjectPhasesBackup(String(projectId), updates.phases);
+    }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('projects')
       .update(updatePayload)
       .eq('id', projectId)
       .eq('user_id', user.id)
       .select();
+
+    if (error && String(error.message || '').includes('phases')) {
+      const fallbackPayload = { ...updatePayload };
+      delete fallbackPayload.phases;
+      if (Object.keys(fallbackPayload).length === 0) {
+        return { success: true };
+      }
+      const retry = await supabase
+        .from('projects')
+        .update(fallbackPayload)
+        .eq('id', projectId)
+        .eq('user_id', user.id)
+        .select();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error('Error al actualizar proyecto en Supabase:', error);
@@ -109,30 +171,41 @@ export async function fetchCloudProjects(userId?: string): Promise<Project[]> {
 
     if (!data || data.length === 0) return [];
 
-    return data.map(row => ({
-      id: String(row.id),
-      title: row.title || 'Proyecto sin título',
-      description: row.description || '',
-      category: row.category || 'General',
-      status: row.status || 'Planificación',
-      priority: row.priority || 'Media',
-      startDate: row.start_date || new Date().toISOString().split('T')[0],
-      targetDate: row.end_date || row.target_date || undefined,
-      progress: typeof row.progress === 'number' ? row.progress : 0,
-      tasks: (row.tasks || []).map((t: any) => ({
+    return data.map(row => {
+      const pId = String(row.id);
+      const cloudPhases = Array.isArray(row.phases) && row.phases.length > 0 ? row.phases : null;
+      const resolvedPhases = cloudPhases
+        ? ensureProjectPhases(cloudPhases)
+        : (getLocalProjectPhasesBackup(pId) || ensureProjectPhases());
+
+      const mappedTasks = (row.tasks || []).map((t: any) => ({
         id: String(t.id),
         title: t.title || 'Tarea sin título',
-        completed: Boolean(t.completed || t.status === 'completed'),
+        completed: Boolean(t.is_completed !== undefined ? t.is_completed : (t.completed || t.status === 'completed')),
         dueDate: t.due_date || t.date || undefined,
         isExec: t.is_exec !== undefined ? Boolean(t.is_exec) : true,
         isMyDay: Boolean(t.is_my_day),
         description: t.description || '',
         priority: t.priority || 'medium',
         status: t.status || (t.completed ? 'completed' : 'pending')
-      })),
-      createdAt: row.created_at || new Date().toISOString(),
-      updatedAt: row.updated_at || new Date().toISOString()
-    }));
+      }));
+
+      return {
+        id: pId,
+        title: row.title || 'Proyecto sin título',
+        description: row.description || '',
+        category: row.category || 'General',
+        status: row.status || 'Planificación',
+        priority: row.priority || 'Media',
+        startDate: row.start_date || new Date().toISOString().split('T')[0],
+        targetDate: row.end_date || row.target_date || undefined,
+        progress: calculateProjectProgress(mappedTasks, resolvedPhases),
+        tasks: mappedTasks,
+        phases: resolvedPhases,
+        createdAt: row.created_at || new Date().toISOString(),
+        updatedAt: row.updated_at || new Date().toISOString()
+      };
+    });
   } catch (err) {
     console.error('Error al obtener proyectos desde Supabase:', err);
     return [];

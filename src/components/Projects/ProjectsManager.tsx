@@ -16,11 +16,14 @@ import {
   X, 
   Sparkles,
   ChevronRight,
+  ChevronDown,
+  Layers,
   Filter
 } from 'lucide-react';
-import { Project, ProjectPriority, ProjectStatus, ProjectTask } from '../../types';
+import { Project, ProjectPhase, ProjectPriority, ProjectStatus, ProjectTask } from '../../types';
 import { updateCloudTask } from '../../lib/supabaseTasks';
 import { supabase } from '../../lib/supabase';
+import { createDefaultProjectPhases, ensureProjectPhases, getPhasesCompletionStats, calculateProjectProgress } from '../../utils/projectTemplates';
 
 interface ProjectsManagerProps {
   projects: Project[];
@@ -49,9 +52,11 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const [formPriority, setFormPriority] = useState<ProjectPriority>('Alta');
   const [formStartDate, setFormStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [formTargetDate, setFormTargetDate] = useState('');
-  const [formProgress, setFormProgress] = useState(0);
   const [formKpis, setFormKpis] = useState('');
   const [formTasks, setFormTasks] = useState<ProjectTask[]>([]);
+  const [formPhases, setFormPhases] = useState<ProjectPhase[]>(() => createDefaultProjectPhases());
+  const [isModalPhasesExpanded, setIsModalPhasesExpanded] = useState(false);
+  const [expandedPhasesIds, setExpandedPhasesIds] = useState<Record<string, boolean>>({});
   const [newTaskInput, setNewTaskInput] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,7 +78,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     const inProgress = realProjects.filter(p => p.status === 'En Progreso').length;
     const completed = realProjects.filter(p => p.status === 'Completado').length;
     const avgProgress = total > 0 
-      ? Math.round(realProjects.reduce((acc, p) => acc + p.progress, 0) / total) 
+      ? Math.round(realProjects.reduce((acc, p) => acc + calculateProjectProgress(p.tasks, p.phases), 0) / total) 
       : 0;
 
     return { total, inProgress, completed, avgProgress };
@@ -102,9 +107,10 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     setFormPriority('Alta');
     setFormStartDate(new Date().toISOString().split('T')[0]);
     setFormTargetDate('');
-    setFormProgress(0);
     setFormKpis('');
     setFormTasks([]);
+    setFormPhases(createDefaultProjectPhases());
+    setIsModalPhasesExpanded(false);
     setNewTaskInput('');
     setNewTaskDueDate('');
     setIsModalOpen(true);
@@ -119,9 +125,10 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     setFormPriority(project.priority);
     setFormStartDate(project.startDate);
     setFormTargetDate(project.targetDate || '');
-    setFormProgress(project.progress);
     setFormKpis(project.kpis || '');
     setFormTasks(project.tasks ? [...project.tasks] : []);
+    setFormPhases(ensureProjectPhases(project.phases));
+    setIsModalPhasesExpanded(false);
     setNewTaskInput('');
     setNewTaskDueDate('');
     setIsModalOpen(true);
@@ -169,18 +176,27 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           ]
         : formTasks;
 
+      const calculatedProgress = calculateProjectProgress(finalTasks, formPhases);
+      const resolvedStatus: ProjectStatus =
+        finalTasks.length > 0 && calculatedProgress === 100
+          ? 'Completado'
+          : formStatus === 'Completado' && finalTasks.length > 0 && calculatedProgress < 100
+          ? 'En Progreso'
+          : formStatus;
+
       const updatedProject: Project = {
         id: editingProject ? editingProject.id : 'proj-' + Date.now(),
         title: formTitle.trim(),
         description: formDescription.trim(),
         category: formCategory.trim() || undefined,
-        status: formStatus,
+        status: resolvedStatus,
         priority: formPriority,
         startDate: formStartDate,
         targetDate: formTargetDate || undefined,
-        progress: formProgress,
+        progress: calculatedProgress,
         kpis: formKpis.trim() || undefined,
         tasks: finalTasks,
+        phases: formPhases,
         createdAt: editingProject ? editingProject.createdAt : new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -196,6 +212,45 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     }
   };
 
+  const handleTogglePhaseItem = (project: Project, phaseId: string, itemId: string) => {
+    const currentPhases = ensureProjectPhases(project.phases);
+    const updatedPhases = currentPhases.map(phase => {
+      if (phase.id !== phaseId) return phase;
+      return {
+        ...phase,
+        items: phase.items.map(item =>
+          item.id === itemId ? { ...item, completed: !item.completed } : item
+        )
+      };
+    });
+
+    const newProgress = calculateProjectProgress(project.tasks, updatedPhases);
+
+    const updatedProject: Project = {
+      ...project,
+      phases: updatedPhases,
+      progress: newProgress,
+      updatedAt: new Date().toISOString()
+    };
+
+    onSaveProject(updatedProject, { skipTaskSync: true, silent: true });
+  };
+
+  const handleToggleModalPhaseItem = (phaseId: string, itemId: string) => {
+    setFormPhases(prev =>
+      prev.map(phase =>
+        phase.id !== phaseId
+          ? phase
+          : {
+              ...phase,
+              items: phase.items.map(item =>
+                item.id === itemId ? { ...item, completed: !item.completed } : item
+              )
+            }
+      )
+    );
+  };
+
   // Quick Task Toggle on Project Card (Optimistic 0ms UI update)
   const handleToggleTask = (project: Project, taskId: string) => {
     const targetTask = project.tasks.find(t => t.id === taskId);
@@ -207,16 +262,13 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       t.id === taskId ? { ...t, completed: newCompleted, status: newCompleted ? 'completed' : 'pending' } : t
     );
 
-    const completedCount = updatedTasks.filter(t => t.completed).length;
-    const newProgress = updatedTasks.length > 0 
-      ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100)) 
-      : project.progress;
+    const newProgress = calculateProjectProgress(updatedTasks, project.phases);
 
     const updatedProject: Project = {
       ...project,
       tasks: updatedTasks,
       progress: newProgress,
-      status: newProgress === 100 ? 'Completado' : (project.status === 'Completado' ? 'En Progreso' : project.status)
+      status: updatedTasks.length > 0 && newProgress === 100 ? 'Completado' : (project.status === 'Completado' ? 'En Progreso' : project.status)
     };
 
     (onSaveProject as any)(updatedProject, { skipTaskSync: true, silent: true });
@@ -225,17 +277,6 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       completed: newCompleted,
       status: newCompleted ? 'completed' : 'pending'
     }).catch(err => console.error('Error en Supabase:', err));
-  };
-
-  // Quick Progress Adjuster
-  const handleProgressChange = (project: Project, newProgress: number) => {
-    const clampedProgress = Math.max(0, Math.min(100, newProgress));
-    const updatedProject: Project = {
-      ...project,
-      progress: clampedProgress,
-      status: clampedProgress === 100 ? 'Completado' : (project.status === 'Completado' && clampedProgress < 100 ? 'En Progreso' : project.status)
-    };
-    onSaveProject(updatedProject, { skipTaskSync: true });
   };
 
   // Helper styling badges
@@ -457,32 +498,38 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                 </div>
               )}
 
-              {/* Progress Bar & Quick Slider */}
-              <div className="space-y-1.5 pt-2 border-t border-slate-800">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-slate-400 flex items-center gap-1">
-                    <TrendingUp className="w-3.5 h-3.5 text-[#00F0FF]" /> Avance del Proyecto
-                  </span>
-                  <span className="text-[#00F0FF] font-black">{project.progress}%</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-[#0A0D14] border border-slate-800 overflow-hidden relative">
-                  <div
-                    className="h-full bg-gradient-to-r from-[#00F0FF] to-[#10B981] transition-all duration-300"
-                    style={{ width: `${project.progress}%` }}
-                  />
-                </div>
-                <input
-                  key={project.progress}
-                  type="range"
-                  min="0"
-                  max="100"
-                  defaultValue={project.progress}
-                  onMouseUp={(e) => handleProgressChange(project, parseInt((e.target as HTMLInputElement).value, 10))}
-                  onTouchEnd={(e) => handleProgressChange(project, parseInt((e.target as HTMLInputElement).value, 10))}
-                  className="w-full accent-[#00F0FF] cursor-pointer h-1.5 opacity-40 hover:opacity-100 transition-opacity"
-                  title="Ajustar avance rápido"
-                />
-              </div>
+              {/* Progress Bar (Auto-calculated from project tasks) */}
+              {(() => {
+                const taskTotal = project.tasks ? project.tasks.length : 0;
+                const taskCompleted = project.tasks ? project.tasks.filter(t => t.completed).length : 0;
+                const phaseStatsForProgress = getPhasesCompletionStats(project.phases);
+                const displayProgress = calculateProjectProgress(project.tasks, project.phases);
+                const breakdownLabel = taskTotal > 0
+                  ? `${taskCompleted}/${taskTotal} tareas`
+                  : phaseStatsForProgress.completed > 0
+                  ? `${phaseStatsForProgress.completed}/${phaseStatsForProgress.total} fases`
+                  : '0 tareas';
+
+                return (
+                  <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <TrendingUp className="w-3.5 h-3.5 text-[#00F0FF]" /> Avance del Proyecto
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-400 font-normal">({breakdownLabel})</span>
+                        <span className="text-[#00F0FF] font-black">{displayProgress}%</span>
+                      </div>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-[#0A0D14] border border-slate-800 overflow-hidden relative">
+                      <div
+                        className="h-full bg-gradient-to-r from-[#00F0FF] to-[#10B981] transition-all duration-300"
+                        style={{ width: `${displayProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Checklist Tasks */}
               {project.tasks && project.tasks.length > 0 && (
@@ -545,6 +592,96 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                   </ul>
                 </div>
               )}
+
+              {/* 3-Phase MVP Template Checklist */}
+              {(() => {
+                const projectPhases = ensureProjectPhases(project.phases);
+                const phaseStats = getPhasesCompletionStats(projectPhases);
+                const isExpanded = Boolean(expandedPhasesIds[project.id]);
+
+                return (
+                  <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedPhasesIds(prev => ({
+                          ...prev,
+                          [project.id]: !prev[project.id]
+                        }))
+                      }
+                      className="w-full flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[#0A0D14] border border-slate-800 hover:border-[#00F0FF]/40 transition-all text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Layers className="w-3.5 h-3.5 text-[#00F0FF] shrink-0" />
+                        <span className="text-[11px] font-bold text-slate-200 truncate">
+                          Ruta MVP (3 Fases)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          phaseStats.completed === phaseStats.total && phaseStats.total > 0
+                            ? 'bg-[#10B981]/15 text-[#10B981] border-[#10B981]/40'
+                            : 'bg-[#00F0FF]/10 text-[#00F0FF] border-[#00F0FF]/30'
+                        }`}>
+                          {phaseStats.completed}/{phaseStats.total} · {phaseStats.percent}%
+                        </span>
+                        {isExpanded ? (
+                          <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                        )}
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="space-y-3 p-3 rounded-xl bg-[#0A0D14]/90 border border-slate-800 max-h-80 overflow-y-auto pr-2">
+                        {projectPhases.map((phase) => {
+                          const pDone = phase.items.filter(i => i.completed).length;
+                          const pTotal = phase.items.length;
+                          return (
+                            <div key={phase.id} className="space-y-1.5">
+                              <div className="flex items-center justify-between gap-2 pb-1 border-b border-slate-800/80">
+                                <span className="text-[11px] font-bold text-[#00F0FF]">
+                                  {phase.title}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                                  {pDone}/{pTotal}
+                                </span>
+                              </div>
+                              <ul className="space-y-1">
+                                {phase.items.map((item) => (
+                                  <li
+                                    key={item.id}
+                                    onClick={() => handleTogglePhaseItem(project, phase.id, item.id)}
+                                    className={`flex items-start gap-2 p-1.5 rounded-lg text-[11px] cursor-pointer transition-colors ${
+                                      item.completed
+                                        ? 'text-slate-500 bg-slate-900/40'
+                                        : 'text-slate-200 hover:bg-slate-800/60'
+                                    }`}
+                                  >
+                                    <div
+                                      className={`w-3.5 h-3.5 mt-0.5 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                                        item.completed
+                                          ? 'bg-[#10B981] border-[#10B981] text-[#0A0D14]'
+                                          : 'border-slate-600 hover:border-[#00F0FF]'
+                                      }`}
+                                    >
+                                      {item.completed && <CheckCircle2 className="w-2.5 h-2.5 stroke-[3]" />}
+                                    </div>
+                                    <span className={`leading-snug ${item.completed ? 'line-through text-slate-500' : ''}`}>
+                                      {item.title}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Footer Dates */}
               <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-800">
@@ -700,19 +837,37 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
-                    Avance % ({formProgress}%)
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={formProgress}
-                    onChange={(e) => setFormProgress(parseInt(e.target.value, 10))}
-                    className="w-full accent-[#00F0FF] mt-2 cursor-pointer"
-                  />
-                </div>
+                {(() => {
+                  const previewTasks = newTaskInput.trim()
+                    ? [...formTasks, { id: 'preview', title: newTaskInput.trim(), completed: false }]
+                    : formTasks;
+                  const previewProgress = calculateProjectProgress(previewTasks, formPhases);
+                  const previewDone = previewTasks.filter(t => t.completed).length;
+
+                  return (
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
+                        Avance Calculado ({previewProgress}%)
+                      </label>
+                      <div className="px-3 py-2 bg-[#0A0D14] border border-slate-800 rounded-xl space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] text-slate-400">
+                          <span>
+                            {previewTasks.length > 0
+                              ? `${previewDone}/${previewTasks.length} tareas`
+                              : 'Basado en tareas'}
+                          </span>
+                          <span className="text-[#00F0FF] font-bold">{previewProgress}%</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-900 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-[#00F0FF] to-[#10B981] transition-all duration-300"
+                            style={{ width: `${previewProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* KPIs */}
@@ -794,6 +949,75 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                   </ul>
                 )}
               </div>
+
+              {/* 3-Phase MVP Template inside Modal */}
+              {(() => {
+                const modalPhaseStats = getPhasesCompletionStats(formPhases);
+                return (
+                  <div className="space-y-2 border-t border-slate-800 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsModalPhasesExpanded(prev => !prev)}
+                      className="w-full flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[#0A0D14] border border-slate-800 hover:border-[#00F0FF]/40 transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Layers className="w-3.5 h-3.5 text-[#00F0FF]" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                          Plantilla de Fases MVP ({modalPhaseStats.completed}/{modalPhaseStats.total})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-[#00F0FF] font-bold">
+                          {isModalPhasesExpanded ? 'Ocultar' : 'Ver / Marcar'}
+                        </span>
+                        {isModalPhasesExpanded ? (
+                          <ChevronDown className="w-4 h-4 text-slate-400" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-slate-400" />
+                        )}
+                      </div>
+                    </button>
+
+                    {isModalPhasesExpanded && (
+                      <div className="space-y-3 p-3 rounded-xl bg-[#0A0D14] border border-slate-800 max-h-64 overflow-y-auto">
+                        {formPhases.map((phase) => (
+                          <div key={phase.id} className="space-y-1.5">
+                            <div className="text-[11px] font-bold text-[#00F0FF] border-b border-slate-800 pb-1">
+                              {phase.title}
+                            </div>
+                            <ul className="space-y-1">
+                              {phase.items.map((item) => (
+                                <li
+                                  key={item.id}
+                                  onClick={() => handleToggleModalPhaseItem(phase.id, item.id)}
+                                  className={`flex items-start gap-2 p-1.5 rounded-lg text-[11px] cursor-pointer transition-colors ${
+                                    item.completed
+                                      ? 'text-slate-500'
+                                      : 'text-slate-200 hover:bg-slate-800/60'
+                                  }`}
+                                >
+                                  <div
+                                    className={`w-3.5 h-3.5 mt-0.5 rounded border flex items-center justify-center shrink-0 ${
+                                      item.completed
+                                        ? 'bg-[#10B981] border-[#10B981] text-[#0A0D14]'
+                                        : 'border-slate-600'
+                                    }`}
+                                  >
+                                    {item.completed && <CheckCircle2 className="w-2.5 h-2.5 stroke-[3]" />}
+                                  </div>
+                                  <span className={`leading-snug ${item.completed ? 'line-through text-slate-500' : ''}`}>
+                                    {item.title}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Submit / Cancel Buttons */}
               <div className="flex items-center justify-end gap-3 border-t border-slate-800 pt-3">

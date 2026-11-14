@@ -32,6 +32,7 @@ import { AddEditHabitModal } from './AddEditHabitModal';
 import { DayClosureModal } from './DayClosureModal';
 import { MotivationalCard } from '../MotivationalCard';
 import { formatDateToISO, formatFriendlyDate, formatFullDate, getTodayISO, parseISODate } from '../../utils/dateUtils';
+import { calculateProjectProgress } from '../../utils/projectTemplates';
 
 interface DailyTrackerProps {
   habits: Habit[];
@@ -258,10 +259,7 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
       t.id === taskId ? { ...t, completed: newCompleted, status: newCompleted ? 'completed' : 'pending' } : t
     );
 
-    const completedCount = updatedTasks.filter(t => t.completed).length;
-    const newProgress = updatedTasks.length > 0 
-      ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
-      : project.progress;
+    const newProgress = calculateProjectProgress(updatedTasks, project.phases);
 
     const updatedProject: Project = {
       ...project,

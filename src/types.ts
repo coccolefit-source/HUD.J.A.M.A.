@@ -138,6 +138,18 @@ export interface ProjectTask {
   status?: string;
 }
 
+export interface ProjectPhaseItem {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
+export interface ProjectPhase {
+  id: string;
+  title: string;
+  items: ProjectPhaseItem[];
+}
+
 export interface Project {
   id: string;
   title: string;
@@ -149,6 +161,7 @@ export interface Project {
   targetDate?: string;
   progress: number; // 0 - 100
   tasks: ProjectTask[];
+  phases?: ProjectPhase[];
   kpis?: string;
   createdAt: string;
   updatedAt?: string;
