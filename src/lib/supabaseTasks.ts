@@ -78,6 +78,16 @@ export async function fetchCloudTasks(userId?: string): Promise<{ task: ProjectT
   }
 }
 
+function extractMissingColumn(error: any): string | null {
+  const msg = String(error?.message || error?.details || '');
+  if (!msg) return null;
+  const postgrestMatch = msg.match(/Could not find the '([^']+)' column/i);
+  if (postgrestMatch && postgrestMatch[1]) return postgrestMatch[1];
+  const pgMatch = msg.match(/column "([^"]+)"/i);
+  if (pgMatch && pgMatch[1]) return pgMatch[1];
+  return null;
+}
+
 /**
  * 2. Guardar tarea en Supabase
  */
@@ -90,14 +100,20 @@ export async function createCloudTask(task: TaskCloudPayload): Promise<{ success
       return { success: false, error: "Usuario no autenticado en Supabase" };
     }
 
-    const isTempProjId = !task.projectId || String(task.projectId).startsWith('guest_') || String(task.projectId).startsWith('proj-temp-');
+    const isTempProjId =
+      !task.projectId ||
+      task.projectId === 'none' ||
+      task.projectId === 'proj-other' ||
+      String(task.projectId).startsWith('guest_') ||
+      String(task.projectId).startsWith('proj-temp-');
     const validProjectId = isTempProjId ? null : task.projectId;
     const todayISO = new Date().toISOString().split('T')[0];
     const isToday = task.dueDate === todayISO;
 
-    const payload: Record<string, any> = {
+    const attemptPayload: Record<string, any> = {
       user_id: user.id,
       title: task.title ? task.title.trim() : 'Nueva Tarea',
+      type: 'task',
       description: task.description || '',
       completed: Boolean(task.completed),
       is_completed: Boolean(task.completed),
@@ -109,18 +125,23 @@ export async function createCloudTask(task: TaskCloudPayload): Promise<{ success
       is_my_day: task.isMyDay !== undefined ? Boolean(task.isMyDay) : Boolean(isToday)
     };
 
-    console.log("PAYLOAD A INSERTAR EN SUPABASE (tasks):", payload);
-    let { data, error } = await supabase.from('tasks').insert([payload]).select();
+    console.log("PAYLOAD A INSERTAR EN SUPABASE (tasks):", attemptPayload);
+    let data: any[] | null = null;
+    let error: any = null;
 
-    if (error && (error.message?.includes('is_exec') || error.message?.includes('is_my_day') || error.message?.includes('is_completed') || error.message?.includes('completed'))) {
-      const fallbackPayload = { ...payload };
-      if (error.message?.includes('is_exec')) delete fallbackPayload.is_exec;
-      if (error.message?.includes('is_my_day')) delete fallbackPayload.is_my_day;
-      if (error.message?.includes('is_completed')) delete fallbackPayload.is_completed;
-      if (error.message?.includes('column "completed"')) delete fallbackPayload.completed;
-      const retry = await supabase.from('tasks').insert([fallbackPayload]).select();
-      data = retry.data;
-      error = retry.error;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const res = await supabase.from('tasks').insert([attemptPayload]).select();
+      data = res.data;
+      error = res.error;
+      if (!error) break;
+
+      const missingCol = extractMissingColumn(error);
+      if (missingCol && missingCol in attemptPayload) {
+        console.warn(`Columna '${missingCol}' no existe en tabla tasks, reintentando sin ella...`);
+        delete attemptPayload[missingCol];
+        continue;
+      }
+      break;
     }
 
     if (error) {
@@ -157,7 +178,12 @@ export async function updateCloudTask(
     description?: string;
   }
 ): Promise<{ success: boolean; error?: any }> {
-  if (!isSupabaseConfigured || String(taskId).startsWith('guest_')) {
+  if (
+    !isSupabaseConfigured ||
+    String(taskId).startsWith('guest_') ||
+    String(taskId).startsWith('pt-') ||
+    String(taskId).startsWith('temp-')
+  ) {
     return { success: true };
   }
 
@@ -165,60 +191,62 @@ export async function updateCloudTask(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { console.error("No hay usuario autenticado. Cancelando guardado de tarea."); return { success: false, error: "Usuario no autenticado" }; }
 
-    const updatePayload: Record<string, any> = {};
+    const attemptPayload: Record<string, any> = {};
 
     if (updates.completed !== undefined) {
-      updatePayload.completed = updates.completed;
-      updatePayload.is_completed = updates.completed;
-      updatePayload.status = updates.completed ? 'completed' : 'pending';
+      attemptPayload.completed = updates.completed;
+      attemptPayload.is_completed = updates.completed;
+      attemptPayload.status = updates.completed ? 'completed' : 'pending';
     }
     if (updates.title !== undefined) {
-      updatePayload.title = updates.title;
+      attemptPayload.title = updates.title;
     }
     if (updates.description !== undefined) {
-      updatePayload.description = updates.description;
+      attemptPayload.description = updates.description;
     }
     if (updates.dueDate !== undefined) {
-      updatePayload.due_date = updates.dueDate || null;
+      attemptPayload.due_date = updates.dueDate || null;
       const todayISO = new Date().toISOString().split('T')[0];
       if (updates.dueDate === todayISO) {
-        updatePayload.is_my_day = true;
+        attemptPayload.is_my_day = true;
       }
     }
     if (updates.priority !== undefined) {
-      updatePayload.priority = updates.priority;
+      attemptPayload.priority = updates.priority;
     }
     if (updates.status !== undefined) {
-      updatePayload.status = updates.status;
+      attemptPayload.status = updates.status;
     }
     if (updates.projectId !== undefined) {
-      updatePayload.project_id = updates.projectId || null;
+      attemptPayload.project_id =
+        (!updates.projectId || updates.projectId === 'none' || updates.projectId === 'proj-other')
+          ? null
+          : updates.projectId;
     }
     if (updates.isExec !== undefined) {
-      updatePayload.is_exec = updates.isExec;
+      attemptPayload.is_exec = updates.isExec;
     }
     if (updates.isMyDay !== undefined) {
-      updatePayload.is_my_day = updates.isMyDay;
+      attemptPayload.is_my_day = updates.isMyDay;
     }
 
-    let { data, error } = await supabase
-      .from('tasks')
-      .update(updatePayload)
-      .eq('id', taskId);
-
-    if (error && (error.message?.includes('is_exec') || error.message?.includes('is_my_day') || error.message?.includes('updated_at') || error.message?.includes('is_completed') || error.message?.includes('completed'))) {
-      const fallbackPayload = { ...updatePayload };
-      if (error.message?.includes('is_exec')) delete fallbackPayload.is_exec;
-      if (error.message?.includes('is_my_day')) delete fallbackPayload.is_my_day;
-      if (error.message?.includes('updated_at')) delete fallbackPayload.updated_at;
-      if (error.message?.includes('is_completed')) delete fallbackPayload.is_completed;
-      if (error.message?.includes('column "completed"')) delete fallbackPayload.completed;
-      const retry = await supabase
+    let error: any = null;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      if (Object.keys(attemptPayload).length === 0) return { success: true };
+      const res = await supabase
         .from('tasks')
-        .update(fallbackPayload)
+        .update(attemptPayload)
         .eq('id', taskId);
-      if (!retry.error) return { success: true };
-      return { success: false, error: retry.error };
+      error = res.error;
+      if (!error) break;
+
+      const missingCol = extractMissingColumn(error);
+      if (missingCol && missingCol in attemptPayload) {
+        console.warn(`Columna '${missingCol}' no existe en tabla tasks al actualizar, reintentando sin ella...`);
+        delete attemptPayload[missingCol];
+        continue;
+      }
+      break;
     }
 
     if (error) {
@@ -237,7 +265,12 @@ export async function updateCloudTask(
  * 4. Eliminar tarea en Supabase
  */
 export async function deleteCloudTask(taskId: string, projectId?: string): Promise<{ success: boolean; data?: any; error?: any }> {
-  if (!isSupabaseConfigured || String(taskId).startsWith('guest_')) {
+  if (
+    !isSupabaseConfigured ||
+    String(taskId).startsWith('guest_') ||
+    String(taskId).startsWith('pt-') ||
+    String(taskId).startsWith('temp-')
+  ) {
     return { success: true };
   }
 
@@ -251,19 +284,39 @@ export async function deleteCloudTask(taskId: string, projectId?: string): Promi
     const { data, error } = await supabase
       .from('tasks')
       .delete()
-      .eq('id', taskId);
+      .eq('id', taskId)
+      .eq('user_id', user.id)
+      .select('id');
 
     if (error) {
       console.error('Error al eliminar tarea de Supabase:', error);
-      return { success: false, error };
+      return { success: false, error: error.message || error };
     }
 
-    if (projectId && projectId !== 'proj-other' && !String(projectId).startsWith('proj-temp-')) {
+    // Si Supabase no devolvió filas eliminadas, validar si la fila sigue existiendo (ej. bloqueo por política RLS de DELETE)
+    if (!data || data.length === 0) {
+      const { data: stillExists } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('id', taskId)
+        .maybeSingle();
+
+      if (stillExists) {
+        console.error('La tarea sigue existiendo en Supabase tras DELETE (posible bloqueo RLS):', taskId);
+        return {
+          success: false,
+          error: 'Supabase rechazó la eliminación (revisa la política RLS de DELETE en la tabla tasks).'
+        };
+      }
+    }
+
+    if (projectId && projectId !== 'proj-other' && !String(projectId).startsWith('proj-temp-') && !String(projectId).startsWith('proj-')) {
       try {
         const { data: projData } = await supabase
           .from('projects')
           .select('tasks')
           .eq('id', projectId)
+          .eq('user_id', user.id)
           .single();
 
         if (projData && Array.isArray(projData.tasks)) {
@@ -288,26 +341,30 @@ export async function deleteCloudTask(taskId: string, projectId?: string): Promi
 
 /**
  * Sincroniza proyectos/tareas hacia Supabase sin duplicar tareas existentes
- * y elimina tareas removidas del proyecto en Supabase.
+ * y opcionalmente elimina tareas removidas del proyecto en Supabase.
  */
-export async function syncProjectTasksToCloud(project: Project): Promise<Project> {
+export async function syncProjectTasksToCloud(
+  project: Project,
+  options?: { syncDeletions?: boolean; errorsOut?: string[] }
+): Promise<Project> {
   if (!isSupabaseConfigured || String(project.id).startsWith('guest_')) return project;
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return project;
 
-    const isVirtualProject = project.id === 'proj-other' || String(project.id).startsWith('proj-temp-');
+    const isVirtualProject = project.id === 'proj-other' || String(project.id).startsWith('proj-temp-') || String(project.id).startsWith('proj-');
     const targetDbProjectId = isVirtualProject ? null : project.id;
 
     // 1. Consultar IDs de tareas actuales en Supabase para este proyecto (o project_id IS NULL para proj-other)
-    let query = supabase.from('tasks').select('id').eq('user_id', user.id);
-    if (targetDbProjectId) {
-      query = query.eq('project_id', targetDbProjectId);
-    } else {
-      query = query.is('project_id', null);
+    let dbTaskIdsInCloud = new Set<string>();
+    if (options?.syncDeletions && targetDbProjectId) {
+      const { data: dbExistingTasks } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('project_id', targetDbProjectId);
+      dbTaskIdsInCloud = new Set((dbExistingTasks || []).map((row: any) => String(row.id)));
     }
-    const { data: dbExistingTasks } = await query;
-    const dbTaskIdsInCloud = new Set((dbExistingTasks || []).map((row: any) => String(row.id)));
 
     const currentTaskIdsInClient = new Set<string>();
     const updatedTasksList: ProjectTask[] = [];
@@ -316,7 +373,11 @@ export async function syncProjectTasksToCloud(project: Project): Promise<Project
       for (const t of project.tasks) {
         if (String(t.id).startsWith('guest_')) continue;
 
-        const isTempId = String(t.id).startsWith('pt-') || String(t.id).startsWith('temp-') || String(t.id).startsWith('proj-');
+        const isTempId =
+          !t.id ||
+          String(t.id).startsWith('pt-') ||
+          String(t.id).startsWith('temp-') ||
+          String(t.id).startsWith('proj-');
 
         if (isTempId) {
           // Nueva tarea agregada en cliente: insertar en Supabase
@@ -332,7 +393,7 @@ export async function syncProjectTasksToCloud(project: Project): Promise<Project
             projectId: targetDbProjectId || undefined
           });
 
-          if (res.data && res.data.id) {
+          if (res.success && res.data && res.data.id) {
             const realTaskId = String(res.data.id);
             currentTaskIdsInClient.add(realTaskId);
             updatedTasksList.push({
@@ -340,6 +401,9 @@ export async function syncProjectTasksToCloud(project: Project): Promise<Project
               id: realTaskId
             });
           } else {
+            const errMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al insertar subtarea');
+            console.error('Error al insertar subtarea en syncProjectTasksToCloud:', res.error);
+            options?.errorsOut?.push(`${t.title}: ${errMsg}`);
             updatedTasksList.push(t);
           }
         } else {
@@ -361,7 +425,22 @@ export async function syncProjectTasksToCloud(project: Project): Promise<Project
       }
     }
 
-    // 2. Sincronizar columna tasks (jsonb) en la tabla projects de Supabase para reflejar los cambios
+    // 2. Si se solicitó sincronizar eliminaciones (ej. al guardar el modal de edición), borrar de Supabase las tareas quitadas
+    if (options?.syncDeletions && targetDbProjectId && dbTaskIdsInCloud.size > 0) {
+      const removedIds = Array.from(dbTaskIdsInCloud).filter(id => !currentTaskIdsInClient.has(id));
+      for (const removedId of removedIds) {
+        const { error: delErr } = await supabase
+          .from('tasks')
+          .delete()
+          .eq('id', removedId)
+          .eq('user_id', user.id);
+        if (delErr) {
+          console.warn('Error al eliminar subtarea removida del proyecto:', delErr);
+        }
+      }
+    }
+
+    // 3. Sincronizar columna tasks (jsonb) en la tabla projects de Supabase para reflejar los cambios
     if (targetDbProjectId) {
       await supabase
         .from('projects')

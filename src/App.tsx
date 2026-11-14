@@ -69,6 +69,8 @@ function App() {
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const isLoadingUserDataRef = useRef<boolean>(false);
+  const activeProjectSaveCountRef = useRef<number>(0);
+  const recentlyDeletedTaskIdsRef = useRef<Set<string>>(new Set());
 
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const showToast = useCallback((message: string) => {
@@ -434,7 +436,7 @@ function App() {
     }
   };
 
-  const handleSaveProject = async (project: Project, options?: { skipTaskSync?: boolean; silent?: boolean }) => {
+  const handleSaveProject = async (project: Project, options?: { skipTaskSync?: boolean; silent?: boolean; syncDeletions?: boolean }) => {
     // 1. Instant Optimistic UI Update (0ms latency)
     setProjects(prev => {
       const exists = prev.some(p => p.id === project.id);
@@ -444,18 +446,25 @@ function App() {
       return [project, ...prev];
     });
 
-    // 2. Background Cloud Sync
+    // 2. Background Cloud Sync (protected by save lock so Realtime does not wipe subtasks mid-save)
+    activeProjectSaveCountRef.current += 1;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      const taskErrors: string[] = [];
+
       // Check if virtual project container 'proj-other'
       if (project.id === 'proj-other') {
         if (!options?.skipTaskSync) {
-          const syncedProject = await syncProjectTasksToCloud(project);
+          const syncedProject = await syncProjectTasksToCloud(project, { errorsOut: taskErrors });
           setProjects(prev => prev.map(p => p.id === 'proj-other' ? syncedProject : p));
         }
-        if (!options?.silent) showToast("Tareas guardadas en Supabase.");
+        if (taskErrors.length > 0) {
+          alert(`Algunas tareas no se pudieron guardar en Supabase:\n${taskErrors.join('\n')}`);
+        } else if (!options?.silent) {
+          showToast("Tareas guardadas en Supabase.");
+        }
         return;
       }
 
@@ -466,13 +475,23 @@ function App() {
         !String(project.id).startsWith('guest_');
 
       if (isExistingInDb) {
+        // Sync subtasks into public.tasks FIRST so Realtime on projects never observes stale tasks
+        let syncedProject = project;
+        if (!options?.skipTaskSync) {
+          syncedProject = await syncProjectTasksToCloud(project, {
+            syncDeletions: options?.syncDeletions,
+            errorsOut: taskErrors
+          });
+          setProjects(prev => prev.map(p => p.id === project.id ? syncedProject : p));
+        }
+
         const res = await updateCloudProject(project.id, {
-          title: project.title,
-          description: project.description,
-          status: project.status,
-          priority: project.priority,
-          progress: project.progress,
-          tasks: project.tasks || []
+          title: syncedProject.title,
+          description: syncedProject.description,
+          status: syncedProject.status,
+          priority: syncedProject.priority,
+          progress: syncedProject.progress,
+          tasks: syncedProject.tasks || []
         });
 
         if (!res.success || res.error) {
@@ -480,11 +499,11 @@ function App() {
           return;
         }
 
-        if (!options?.skipTaskSync) {
-          const syncedProject = await syncProjectTasksToCloud(project);
-          setProjects(prev => prev.map(p => p.id === project.id ? syncedProject : p));
+        if (taskErrors.length > 0) {
+          alert(`Proyecto actualizado, pero hubo un error al guardar subtareas en Supabase:\n${taskErrors.join('\n')}`);
+        } else if (!options?.silent) {
+          showToast("Proyecto actualizado en Supabase.");
         }
-        if (!options?.silent) showToast("Proyecto actualizado en Supabase.");
       } else {
         const res = await createCloudProject({
           title: project.title,
@@ -492,7 +511,7 @@ function App() {
           status: project.status,
           priority: project.priority,
           progress: project.progress,
-          tasks: project.tasks || []
+          tasks: []
         });
 
         if (!res.success || !res.data) {
@@ -507,28 +526,115 @@ function App() {
           createdAt: res.data.created_at || new Date().toISOString()
         };
 
-        const syncedProject = await syncProjectTasksToCloud(createdProj);
+        const syncedProject = await syncProjectTasksToCloud(createdProj, { errorsOut: taskErrors });
         setProjects(prev => [syncedProject, ...prev.filter(p => p.id !== project.id && p.id !== realId)]);
-        if (!options?.silent) showToast("Proyecto creado en Supabase.");
+        if (taskErrors.length > 0) {
+          alert(`Proyecto creado, pero hubo un error al guardar subtareas en Supabase:\n${taskErrors.join('\n')}`);
+        } else if (!options?.silent) {
+          showToast("Proyecto creado en Supabase.");
+        }
       }
     } catch (err: any) {
       console.error('Error inesperado en handleSaveProject:', err);
+    } finally {
+      activeProjectSaveCountRef.current = Math.max(0, activeProjectSaveCountRef.current - 1);
     }
   };
 
   const handleDeleteProject = async (projectId: string) => {
     if (projectId === 'proj-other') return;
+    activeProjectSaveCountRef.current += 1;
     try {
       setProjects(prev => prev.filter(p => p.id !== projectId));
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await deleteCloudProject(projectId);
+        const res = await deleteCloudProject(projectId);
+        if (!res.success) {
+          console.error('Error al eliminar proyecto en Supabase:', res.error);
+          alert(`No se pudo eliminar el proyecto en Supabase: ${typeof res.error === 'string' ? res.error : (res.error?.message || 'Error de permisos/RLS')}`);
+          await loadAllUserData(user.id, true);
+          return;
+        }
       }
       showToast("Proyecto eliminado con éxito.");
     } catch (e: any) {
       console.error('Error al eliminar proyecto:', e);
-      showToast("Proyecto eliminado.");
+      showToast("Error al eliminar proyecto.");
+    } finally {
+      activeProjectSaveCountRef.current = Math.max(0, activeProjectSaveCountRef.current - 1);
+    }
+  };
+
+  const handleDeleteTask = async (projectId: string, taskId: string) => {
+    const taskIdStr = String(taskId);
+    let previousProjectSnapshot: Project | undefined;
+
+    recentlyDeletedTaskIdsRef.current.add(taskIdStr);
+    activeProjectSaveCountRef.current += 1;
+
+    setProjects(prev => prev.map(proj => {
+      if (proj.id !== projectId) return proj;
+      previousProjectSnapshot = proj;
+      const updatedTasks = proj.tasks.filter(t => String(t.id) !== taskIdStr);
+      const completedCount = updatedTasks.filter(t => t.completed).length;
+      const newProgress = updatedTasks.length > 0
+        ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
+        : 0;
+      return {
+        ...proj,
+        tasks: updatedTasks,
+        progress: newProgress,
+        updatedAt: new Date().toISOString()
+      };
+    }));
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const delRes = await deleteCloudTask(taskIdStr, projectId);
+      if (!delRes.success) {
+        recentlyDeletedTaskIdsRef.current.delete(taskIdStr);
+        if (previousProjectSnapshot) {
+          const snapshot = previousProjectSnapshot;
+          setProjects(prev => prev.map(p => p.id === projectId ? snapshot : p));
+        }
+        const errMsg = typeof delRes.error === 'string'
+          ? delRes.error
+          : (delRes.error?.message || 'Error al eliminar la tarea en Supabase');
+        alert(`No se pudo eliminar la tarea en la nube:\n${errMsg}`);
+        return;
+      }
+
+      if (
+        previousProjectSnapshot &&
+        projectId !== 'proj-other' &&
+        !String(projectId).startsWith('proj-temp-') &&
+        !String(projectId).startsWith('proj-') &&
+        !String(projectId).startsWith('guest_')
+      ) {
+        const remainingTasks = previousProjectSnapshot.tasks.filter(t => String(t.id) !== taskIdStr);
+        const completedCount = remainingTasks.filter(t => t.completed).length;
+        const newProgress = remainingTasks.length > 0
+          ? Math.min(100, Math.round((completedCount / remainingTasks.length) * 100))
+          : 0;
+
+        await updateCloudProject(projectId, {
+          progress: newProgress,
+          tasks: remainingTasks
+        });
+      }
+
+      showToast("Tarea eliminada de Supabase.");
+      setTimeout(() => {
+        recentlyDeletedTaskIdsRef.current.delete(taskIdStr);
+      }, 15000);
+    } catch (err: any) {
+      recentlyDeletedTaskIdsRef.current.delete(taskIdStr);
+      console.error('Error al eliminar tarea:', err);
+    } finally {
+      activeProjectSaveCountRef.current = Math.max(0, activeProjectSaveCountRef.current - 1);
     }
   };
 
@@ -966,7 +1072,7 @@ function App() {
 
   const loadAllUserData = useCallback(async (userId: string, force = false) => {
     if (!isSupabaseConfigured || !userId) return;
-    if (isLoadingUserDataRef.current && !force) return;
+    if ((isLoadingUserDataRef.current || activeProjectSaveCountRef.current > 0) && !force) return;
     isLoadingUserDataRef.current = true;
     try {
       const fetchHabitsWithFallback = async () => {
@@ -987,6 +1093,9 @@ function App() {
         fetchCloudProductivity(userId),
         fetchCloudReviews(userId)
       ]);
+
+      if (tasksRes.error) console.error('Error cargando tareas desde Supabase:', tasksRes.error);
+      if (projectsRes.error) console.error('Error cargando proyectos desde Supabase:', projectsRes.error);
 
       if (habitsRes.data) {
         const hasDbOrder = habitsRes.data.some((r: any) => r.order !== null && r.order !== undefined);
@@ -1049,7 +1158,9 @@ function App() {
       }> = [];
 
       for (const t of (tasksRes.data || [])) {
+        if (t.type === 'habit' || t.type === 'Habit') continue;
         const tId = String(t.id);
+        if (recentlyDeletedTaskIdsRef.current.has(tId)) continue;
         const pId = (t.project_id && t.project_id !== 'null') ? String(t.project_id) : 'proj-other';
         const taskKey = `${tId}_${pId}_${t.title}`;
         
@@ -1323,9 +1434,22 @@ function App() {
                   };
                 });
               });
+            } else if (payload.eventType === 'DELETE' && payload.old?.id) {
+              const deletedTaskId = String(payload.old.id);
+              setProjects(prevProjects => prevProjects.map(proj => {
+                if (!proj.tasks.some(t => String(t.id) === deletedTaskId)) return proj;
+                const updatedTasks = proj.tasks.filter(t => String(t.id) !== deletedTaskId);
+                const completedCount = updatedTasks.filter(t => t.completed).length;
+                const newProgress = updatedTasks.length > 0
+                  ? Math.min(100, Math.round((completedCount / updatedTasks.length) * 100))
+                  : 0;
+                return { ...proj, tasks: updatedTasks, progress: newProgress };
+              }));
             }
 
-            loadAllUserData(user.id);
+            if (activeProjectSaveCountRef.current === 0) {
+              loadAllUserData(user.id);
+            }
           }
         )
         .on(
@@ -1333,7 +1457,9 @@ function App() {
           { event: '*', schema: 'public', table: 'projects' },
           (payload) => {
             console.log('Cambio en tiempo real en tabla projects:', payload);
-            loadAllUserData(user.id);
+            if (activeProjectSaveCountRef.current === 0) {
+              loadAllUserData(user.id);
+            }
           }
         )
         .subscribe();
@@ -1519,7 +1645,7 @@ function App() {
       />
       <main className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full min-w-0 space-y-6">
          {activeTab === 'tracker' && <DailyTracker habits={habits} logs={logs} projects={projects} onSaveProject={handleSaveProject} onToggleHabit={handleToggleHabit} onSaveHabit={handleSaveHabit} onDeleteHabit={handleDeleteHabit} onCloseDay={handleCloseDay} onSaveDailyWins={handleSaveDailyWins} onSaveSportsEntry={handleSaveSportsEntry} onDeleteSportsEntry={handleDeleteSportsEntry} onSaveProductivity={handleSaveProductivity} onMoveHabit={handleMoveHabit} onReorderHabits={handleReorderHabits} calculateStreak={calculateStreak} />}
-         {activeTab === 'exec' && <ExecCenter projects={projects} onSaveProject={handleSaveProject} onUpdateProjects={setProjects} />}
+         {activeTab === 'exec' && <ExecCenter projects={projects} onSaveProject={handleSaveProject} onUpdateProjects={setProjects} onDeleteTask={handleDeleteTask} />}
          {activeTab === 'projects' && <ProjectsManager projects={projects} onSaveProject={handleSaveProject} onDeleteProject={handleDeleteProject} />}
          {activeTab === 'analytics' && <AnalyticsTrends habits={habits} logs={logs} calculateStreak={calculateStreak} />}
          {activeTab === 'review' && <ReviewInsights habits={habits} logs={logs} reviews={reviews} onSaveReview={handleSaveReview} />}

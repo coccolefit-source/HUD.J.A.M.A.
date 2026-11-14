@@ -19,12 +19,12 @@ import {
   Filter
 } from 'lucide-react';
 import { Project, ProjectPriority, ProjectStatus, ProjectTask } from '../../types';
-import { updateCloudTask, syncProjectTasksToCloud } from '../../lib/supabaseTasks';
+import { updateCloudTask } from '../../lib/supabaseTasks';
 import { supabase } from '../../lib/supabase';
 
 interface ProjectsManagerProps {
   projects: Project[];
-  onSaveProject: (project: Project) => void;
+  onSaveProject: (project: Project, options?: { skipTaskSync?: boolean; silent?: boolean; syncDeletions?: boolean }) => Promise<void> | void;
   onDeleteProject: (projectId: string) => void;
 }
 
@@ -127,16 +127,17 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     setIsModalOpen(true);
   };
 
-  const handleAddTaskToForm = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddTaskToForm = (e?: React.FormEvent | React.KeyboardEvent) => {
+    if (e) e.preventDefault();
     if (!newTaskInput.trim()) return;
     setFormTasks(prev => [
       ...prev, 
       { 
-        id: 'pt-' + Date.now(), 
+        id: 'pt-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7), 
         title: newTaskInput.trim(), 
         completed: false,
-        dueDate: newTaskDueDate || undefined
+        dueDate: newTaskDueDate || undefined,
+        isExec: true
       }
     ]);
     setNewTaskInput('');
@@ -153,7 +154,20 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
     try {
       setIsSubmitting(true);
-      console.log("Delegando guardado de proyecto a componente principal...");
+
+      // Si el usuario escribió una subtarea y no presionó "+ Agregar" antes de guardar, incluirla automáticamente
+      const finalTasks: ProjectTask[] = newTaskInput.trim()
+        ? [
+            ...formTasks,
+            {
+              id: 'pt-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+              title: newTaskInput.trim(),
+              completed: false,
+              dueDate: newTaskDueDate || undefined,
+              isExec: true
+            }
+          ]
+        : formTasks;
 
       const updatedProject: Project = {
         id: editingProject ? editingProject.id : 'proj-' + Date.now(),
@@ -166,12 +180,14 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
         targetDate: formTargetDate || undefined,
         progress: formProgress,
         kpis: formKpis.trim() || undefined,
-        tasks: formTasks,
+        tasks: finalTasks,
         createdAt: editingProject ? editingProject.createdAt : new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
 
-      onSaveProject(updatedProject);
+      await onSaveProject(updatedProject, { syncDeletions: Boolean(editingProject) });
+      setNewTaskInput('');
+      setNewTaskDueDate('');
       setIsModalOpen(false);
     } catch (err) {
       console.error("Error inesperado al guardar proyecto:", err);
@@ -219,7 +235,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       progress: clampedProgress,
       status: clampedProgress === 100 ? 'Completado' : (project.status === 'Completado' && clampedProgress < 100 ? 'En Progreso' : project.status)
     };
-    onSaveProject(updatedProject);
+    onSaveProject(updatedProject, { skipTaskSync: true });
   };
 
   // Helper styling badges
@@ -724,6 +740,12 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                     type="text"
                     value={newTaskInput}
                     onChange={(e) => setNewTaskInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTaskToForm(e);
+                      }
+                    }}
                     placeholder="Escribe el nombre de la tarea..."
                     className="flex-1 px-3 py-2 bg-[#0A0D14] border border-slate-800 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-[#00F0FF]"
                   />

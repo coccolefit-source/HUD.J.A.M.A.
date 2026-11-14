@@ -27,6 +27,7 @@ interface ExecCenterProps {
   projects: Project[];
   onSaveProject: (project: Project) => void;
   onUpdateProjects: (projects: Project[]) => void;
+  onDeleteTask?: (projectId: string, taskId: string) => Promise<void> | void;
 }
 
 type FilterStatus = 'pending' | 'upcoming' | 'overdue' | 'completed' | 'all';
@@ -34,7 +35,8 @@ type FilterStatus = 'pending' | 'upcoming' | 'overdue' | 'completed' | 'all';
 export const ExecCenter: React.FC<ExecCenterProps> = ({
   projects,
   onSaveProject,
-  onUpdateProjects
+  onUpdateProjects,
+  onDeleteTask
 }) => {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('pending');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
@@ -214,7 +216,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
         updatedAt: new Date().toISOString()
       };
 
-      onSaveProject(updatedProject);
+      (onSaveProject as any)(updatedProject, { skipTaskSync: true, silent: true });
     } else {
       const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar fecha en Supabase');
       console.error('Error en Supabase:', res.error);
@@ -250,7 +252,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
         updatedAt: new Date().toISOString()
       };
 
-      onSaveProject(updatedProject);
+      (onSaveProject as any)(updatedProject, { skipTaskSync: true, silent: true });
     } else {
       const errorMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar Mi Día en Supabase');
       console.error('Error en Supabase:', res.error);
@@ -258,10 +260,22 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     }
   };
 
-  // Handle delete task (0ms Optimistic UI removal + Background Cloud Deletion)
-  const handleDeleteTask = (projectId: string, taskId: string) => {
+  // Handle delete task (0ms Optimistic UI removal + Verified Cloud Deletion)
+  const handleDeleteTask = async (projectId: string, taskId: string) => {
+    if (onDeleteTask) {
+      await onDeleteTask(projectId, taskId);
+      return;
+    }
+
     const project = (projects || []).find(p => p.id === projectId);
     if (!project) return;
+
+    const delRes = await deleteCloudTask(taskId, projectId);
+    if (!delRes.success) {
+      const errorMsg = typeof delRes.error === 'string' ? delRes.error : (delRes.error?.message || 'Error al eliminar tarea en Supabase');
+      alert(`No se pudo eliminar la tarea en Supabase: ${errorMsg}`);
+      return;
+    }
 
     const updatedTasks = project.tasks.filter(t => t.id !== taskId);
     const completedCount = updatedTasks.filter(t => t.completed).length;
@@ -277,10 +291,6 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
     };
 
     (onSaveProject as any)(updatedProject, { skipTaskSync: true, silent: true });
-
-    deleteCloudTask(taskId, projectId).catch(err => {
-      console.error('Error al eliminar tarea en Supabase:', err);
-    });
   };
 
   // Handle Quick Add Task
@@ -428,7 +438,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
       progress: sourceNewProgress,
       updatedAt: new Date().toISOString()
     };
-    onSaveProject(updatedSourceProject);
+    (onSaveProject as any)(updatedSourceProject, { skipTaskSync: true, silent: true });
 
     // Add task to destination project
     let destProject = (projects || []).find(p => p.id === newProjectId);
@@ -457,7 +467,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
         progress: destNewProgress,
         updatedAt: new Date().toISOString()
       };
-      onSaveProject(updatedDestProject);
+      (onSaveProject as any)(updatedDestProject, { skipTaskSync: true, silent: true });
     }
 
     // Update Supabase

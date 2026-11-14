@@ -183,27 +183,30 @@ export async function deleteCloudProject(projectId: string): Promise<{ success: 
     }
 
     // 1. Explicitly delete tasks associated with project in Supabase
-    try {
-      await supabase
-        .from('tasks')
-        .delete()
-        .eq('project_id', projectId);
-    } catch (e) {
-      console.warn('Advertencia al eliminar sub-tareas de proyecto:', e);
+    const { error: tasksDelErr } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('project_id', projectId)
+      .eq('user_id', user.id);
+
+    if (tasksDelErr) {
+      console.warn('Advertencia al eliminar sub-tareas de proyecto:', tasksDelErr);
     }
 
     // 2. Explicitly delete project in Supabase
     const { data, error } = await supabase
       .from('projects')
       .delete()
-      .eq('id', projectId);
+      .eq('id', projectId)
+      .eq('user_id', user.id);
 
     if (error) {
       console.warn('Advertencia al eliminar proyecto de Supabase:', error);
+      return { success: false, error };
     }
     return { success: true, data };
   } catch (err: any) {
     console.error('Error al eliminar proyecto:', err);
-    return { success: true };
+    return { success: false, error: err };
   }
 }
