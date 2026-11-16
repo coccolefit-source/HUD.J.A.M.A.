@@ -60,6 +60,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const [newTaskInput, setNewTaskInput] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
 
   // Real Projects (excluding virtual unassigned task container)
   const realProjects = useMemo(() => {
@@ -252,7 +253,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   };
 
   // Quick Task Toggle on Project Card (Optimistic 0ms UI update)
-  const handleToggleTask = (project: Project, taskId: string) => {
+  const handleToggleTask = async (project: Project, taskId: string) => {
     const targetTask = project.tasks.find(t => t.id === taskId);
     if (!targetTask) return;
 
@@ -273,10 +274,17 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
     (onSaveProject as any)(updatedProject, { skipTaskSync: true, silent: true });
 
-    updateCloudTask(taskId, { 
+    const res = await updateCloudTask(taskId, { 
       completed: newCompleted,
       status: newCompleted ? 'completed' : 'pending'
-    }).catch(err => console.error('Error en Supabase:', err));
+    });
+
+    if (!res.success) {
+      const errMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar estado en Supabase');
+      setCloudError(`No se pudo guardar el estado de la tarea en Supabase: ${errMsg}`);
+    } else {
+      setCloudError(null);
+    }
   };
 
   // Helper styling badges
@@ -366,6 +374,19 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           <span>Nuevo Proyecto</span>
         </button>
       </div>
+
+      {cloudError && (
+        <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 font-mono text-xs flex items-center justify-between gap-3">
+          <span>{cloudError}</span>
+          <button
+            type="button"
+            onClick={() => setCloudError(null)}
+            className="p-1 rounded hover:bg-rose-500/20 text-rose-300 shrink-0 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* KPI Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

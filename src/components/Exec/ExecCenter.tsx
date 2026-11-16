@@ -160,7 +160,7 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
   }, [allFlattenedTasks, filterStatus, selectedProjectId, selectedPriority, searchQuery, todayISO]);
 
   // Handle toggle task completed state (Optimistic 0ms UI update)
-  const handleToggleTask = (projectId: string, taskId: string) => {
+  const handleToggleTask = async (projectId: string, taskId: string) => {
     const project = (projects || []).find(p => p.id === projectId);
     if (!project) return;
 
@@ -183,11 +183,19 @@ export const ExecCenter: React.FC<ExecCenterProps> = ({
 
     (onSaveProject as any)(updatedProject, { skipTaskSync: true, silent: true });
 
-    updateCloudTask(taskId, { 
+    const res = await updateCloudTask(taskId, { 
       completed: newCompleted,
       status: newCompleted ? 'completed' : 'pending',
       isExec: true
-    }).catch(err => console.error('Error en Supabase:', err));
+    });
+
+    if (!res.success) {
+      const errMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al actualizar tarea en Supabase');
+      setTaskFeedback({
+        type: 'error',
+        message: `No se pudo guardar el estado de la tarea en Supabase: ${errMsg}`
+      });
+    }
   };
 
   // Handle update task due date directly

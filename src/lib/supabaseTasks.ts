@@ -55,7 +55,9 @@ export async function fetchCloudTasks(userId?: string): Promise<{ task: ProjectT
       const isExecCalculated = row.is_exec !== undefined && row.is_exec !== null
         ? Boolean(row.is_exec)
         : true;
-      const isCompleted = Boolean(row.is_completed !== undefined ? row.is_completed : (row.completed || row.status === 'completed'));
+      const isCompleted = row.is_completed !== undefined && row.is_completed !== null
+        ? Boolean(row.is_completed)
+        : Boolean(row.completed || row.status === 'completed');
 
       return {
         task: {
@@ -230,13 +232,17 @@ export async function updateCloudTask(
       attemptPayload.is_my_day = updates.isMyDay;
     }
 
+    let data: any[] | null = null;
     let error: any = null;
     for (let attempt = 0; attempt < 8; attempt++) {
       if (Object.keys(attemptPayload).length === 0) return { success: true };
       const res = await supabase
         .from('tasks')
         .update(attemptPayload)
-        .eq('id', taskId);
+        .eq('id', taskId)
+        .eq('user_id', user.id)
+        .select('id');
+      data = res.data;
       error = res.error;
       if (!error) break;
 
@@ -252,6 +258,22 @@ export async function updateCloudTask(
     if (error) {
       console.error('Error al actualizar tarea en Supabase:', error);
       return { success: false, error };
+    }
+
+    if (!data || data.length === 0) {
+      const { data: stillExists } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('id', taskId)
+        .maybeSingle();
+
+      if (stillExists) {
+        console.error('Supabase rechazó la actualización de la tarea (posible bloqueo RLS UPDATE):', taskId);
+        return {
+          success: false,
+          error: 'Supabase rechazó actualizar la tarea (revisa la política RLS de UPDATE en la tabla tasks).'
+        };
+      }
     }
 
     return { success: true };

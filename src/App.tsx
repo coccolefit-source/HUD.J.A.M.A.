@@ -514,11 +514,15 @@ function App() {
 
         if (!res.success || res.error) {
           console.error('Error al actualizar proyecto en Supabase:', res.error);
+          const errMsg = typeof res.error === 'string' ? res.error : (res.error?.message || 'Error al guardar cambios del proyecto en Supabase');
+          showToast(`Error Supabase: ${errMsg}`);
           return;
         }
 
-        if (taskErrors.length > 0) {
-          alert(`Proyecto actualizado, pero hubo un error al guardar subtareas en Supabase:\n${taskErrors.join('\n')}`);
+        if (res.phasesMissingInCloud) {
+          showToast("Falta la columna 'phases' en Supabase: el avance de fases se guardó localmente.");
+        } else if (taskErrors.length > 0) {
+          showToast(`Error al guardar subtareas: ${taskErrors[0]}`);
         } else if (!options?.silent) {
           showToast("Proyecto actualizado en Supabase.");
         }
@@ -1194,9 +1198,9 @@ function App() {
             ? Boolean(t.is_exec)
             : true;
 
-          const isCompleted = Boolean(
-            t.is_completed !== undefined ? t.is_completed : (t.completed || t.status === 'completed')
-          );
+          const isCompleted = t.is_completed !== undefined && t.is_completed !== null
+            ? Boolean(t.is_completed)
+            : Boolean(t.completed || t.status === 'completed');
 
           allTasks.push({
             id: tId,
@@ -1579,6 +1583,7 @@ function App() {
     return (
       <div 
         data-theme={currentThemeId}
+        data-theme-mode={activeTheme.isLight ? 'light' : 'dark'}
         className={`min-h-screen w-full flex items-center justify-center ${activeTheme.primaryBg} hud-bg-grid`} 
         style={{ 
           backgroundColor: activeTheme.bgColor,
@@ -1602,6 +1607,7 @@ function App() {
     return (
       <div 
         data-theme={currentThemeId}
+        data-theme-mode={activeTheme.isLight ? 'light' : 'dark'}
         className={`min-h-screen w-full overflow-x-hidden ${activeTheme.primaryBg} hud-bg-grid text-slate-100 flex flex-col lg:flex-row antialiased selection:bg-[#06B6D4] selection:text-slate-950 transition-colors duration-300 font-sans relative`} 
         style={{ 
           backgroundColor: activeTheme.bgColor,
@@ -1642,6 +1648,7 @@ function App() {
   return (
     <div 
       data-theme={currentThemeId}
+      data-theme-mode={activeTheme.isLight ? 'light' : 'dark'}
       className={`min-h-screen w-full overflow-x-hidden ${activeTheme.primaryBg} hud-bg-grid text-slate-100 flex flex-col antialiased selection:bg-[#06B6D4] selection:text-slate-950 transition-colors duration-300 font-sans relative`}
       style={{
         backgroundColor: activeTheme.bgColor,

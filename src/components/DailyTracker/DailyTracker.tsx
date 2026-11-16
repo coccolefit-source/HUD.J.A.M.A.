@@ -245,7 +245,7 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
   }, [projects, selectedDate, todayStr]);
 
   // Handle toggling project task from tracker (Optimistic 0ms UI update)
-  const handleToggleExecTask = (projectId: string, taskId: string) => {
+  const handleToggleExecTask = async (projectId: string, taskId: string) => {
     if (!projects || !onSaveProject) return;
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
@@ -272,10 +272,14 @@ export const DailyTracker: React.FC<DailyTrackerProps> = ({
     (onSaveProject as any)(updatedProject, { skipTaskSync: true, silent: true });
 
     // 2. Sync single task in background
-    updateCloudTask(taskId, { 
+    const res = await updateCloudTask(taskId, { 
       completed: newCompleted,
       status: newCompleted ? 'completed' : 'pending'
-    }).catch(err => console.error('Error background sync task:', err));
+    });
+
+    if (!res.success) {
+      console.error('No se pudo guardar el estado de la tarea en Supabase:', res.error);
+    }
   };
 
   // Daily wins input state

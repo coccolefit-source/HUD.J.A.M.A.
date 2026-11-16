@@ -118,6 +118,24 @@
     --hud-card: #12161A;
   }
 
+  [data-theme="apple_light"] {
+    --hud-accent: #007AFF;
+    --hud-accent-rgb: 0, 122, 255;
+    --hud-secondary: #5856D6;
+    --hud-secondary-rgb: 88, 86, 214;
+    --hud-bg: #F2F2F7;
+    --hud-card: #FFFFFF;
+  }
+
+  [data-theme="apple_dark"] {
+    --hud-accent: #0A84FF;
+    --hud-accent-rgb: 10, 132, 255;
+    --hud-secondary: #5E5CE6;
+    --hud-secondary-rgb: 94, 92, 230;
+    --hud-bg: #000000;
+    --hud-card: #1C1C1E;
+  }
+
   html, body, #root {
     background-color: var(--hud-bg, #080B11);
     color: #f1f5f9;
@@ -374,4 +392,172 @@
 [data-theme-mode="light"] .bg-\[\#00F0FF\] * {
   color: #FFFFFF !important;
 }
+
+/* ==========================================================================
+   Apple iOS / macOS Themes ([data-theme="apple_light"] & [data-theme="apple_dark"])
+   ========================================================================== */
+
+[data-theme^="apple_"],
+[data-theme^="apple_"] body,
+[data-theme^="apple_"] #root,
+[data-theme^="apple_"] .font-sans,
+[data-theme^="apple_"] .font-mono {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif !important;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-theme^="apple_"] .hud-bg-grid {
+  background-color: var(--hud-bg) !important;
+  background-image: none !important;
+}
+
+/* Remove sci-fi neon glow in favor of Apple clean elevation */
+[data-theme^="apple_"] [class*="shadow-\[0_0_"][class*="240\,255"],
+[data-theme^="apple_"] [class*="shadow-\[0_0_"][class*="182\,212"],
+[data-theme^="apple_"] [class*="shadow-\[0_0_"][class*="\#00F0FF"],
+[data-theme^="apple_"] [class*="shadow-\[0_0_"][class*="\#06B6D4"] {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Apple Light Mode (iOS / macOS Light) */
+[data-theme="apple_light"] .hud-card,
+[data-theme="apple_light"] .bg-\[\#101827\],
+[data-theme="apple_light"] [class*="bg-\[\#101827\]"],
+[data-theme="apple_light"] .bg-\[\#080B11\],
+[data-theme="apple_light"] [class*="bg-\[\#080B11\]"],
+[data-theme="apple_light"] .bg-slate-900,
+[data-theme="apple_light"] [class*="bg-slate-900"] {
+  background-color: #FFFFFF !important;
+  border-color: rgba(60, 60, 67, 0.12) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 6px 20px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="apple_light"] header {
+  background-color: rgba(249, 249, 249, 0.85) !important;
+  backdrop-filter: saturate(180%) blur(20px) !important;
+  border-bottom-color: rgba(60, 60, 67, 0.14) !important;
+}
+
+[data-theme="apple_light"] aside {
+  background-color: #F2F2F7 !important;
+  border-right-color: rgba(60, 60, 67, 0.14) !important;
+}
+
+[data-theme="apple_light"] .bg-\[\#0A0D14\]:not(header):not(aside),
+[data-theme="apple_light"] [class*="bg-\[\#0A0D14\]"]:not(header):not(aside),
+[data-theme="apple_light"] .bg-slate-950:not(.fixed),
+[data-theme="apple_light"] [class*="bg-slate-950"]:not(.fixed),
+[data-theme="apple_light"] .bg-slate-800,
+[data-theme="apple_light"] [class*="bg-slate-800"] {
+  background-color: #F2F2F7 !important;
+}
+
+[data-theme="apple_light"] .border-slate-800,
+[data-theme="apple_light"] [class*="border-slate-800"],
+[data-theme="apple_light"] .border-slate-700,
+[data-theme="apple_light"] [class*="border-slate-700"] {
+  border-color: rgba(60, 60, 67, 0.14) !important;
+}
+
+[data-theme="apple_light"] .text-slate-100,
+[data-theme="apple_light"] .text-slate-200,
+[data-theme="apple_light"] .text-white:not([class*="bg-"]) {
+  color: #1C1C1E !important;
+}
+
+[data-theme="apple_light"] .text-slate-300,
+[data-theme="apple_light"] .text-slate-400 {
+  color: #6E6E73 !important;
+}
+
+[data-theme="apple_light"] .text-slate-500,
+[data-theme="apple_light"] .text-slate-600 {
+  color: #8E8E93 !important;
+}
+
+[data-theme="apple_light"] ::selection {
+  background-color: #007AFF !important;
+  color: #FFFFFF !important;
+}
+
+/* Apple Dark Mode (iOS / macOS Dark - OLED Black & Graphite Surfaces) */
+[data-theme="apple_dark"],
+[data-theme="apple_dark"] body,
+[data-theme="apple_dark"] #root {
+  background-color: #000000 !important;
+  color: #F5F5F7 !important;
+}
+
+[data-theme="apple_dark"] header {
+  background-color: rgba(28, 28, 30, 0.85) !important;
+  backdrop-filter: saturate(180%) blur(20px) !important;
+  border-bottom-color: rgba(84, 84, 88, 0.45) !important;
+}
+
+[data-theme="apple_dark"] aside {
+  background-color: #1C1C1E !important;
+  border-right-color: rgba(84, 84, 88, 0.45) !important;
+}
+
+[data-theme="apple_dark"] .hud-card,
+[data-theme="apple_dark"] .bg-\[\#101827\],
+[data-theme="apple_dark"] [class*="bg-\[\#101827\]"],
+[data-theme="apple_dark"] .bg-slate-900,
+[data-theme="apple_dark"] [class*="bg-slate-900"] {
+  background-color: #1C1C1E !important;
+  border-color: rgba(84, 84, 88, 0.4) !important;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-theme="apple_dark"] .bg-\[\#080B11\],
+[data-theme="apple_dark"] [class*="bg-\[\#080B11\]"] {
+  background-color: #000000 !important;
+}
+
+[data-theme="apple_dark"] .bg-\[\#0A0D14\]:not(header):not(aside),
+[data-theme="apple_dark"] [class*="bg-\[\#0A0D14\]"]:not(header):not(aside),
+[data-theme="apple_dark"] .bg-slate-950:not(.fixed),
+[data-theme="apple_dark"] [class*="bg-slate-950"]:not(.fixed),
+[data-theme="apple_dark"] .bg-slate-800,
+[data-theme="apple_dark"] [class*="bg-slate-800"] {
+  background-color: #2C2C2E !important;
+}
+
+[data-theme="apple_dark"] .fixed[class*="bg-slate-950"] {
+  background-color: rgba(0, 0, 0, 0.65) !important;
+}
+
+[data-theme="apple_dark"] .border-slate-800,
+[data-theme="apple_dark"] [class*="border-slate-800"],
+[data-theme="apple_dark"] .border-slate-700,
+[data-theme="apple_dark"] [class*="border-slate-700"] {
+  border-color: rgba(84, 84, 88, 0.45) !important;
+}
+
+[data-theme="apple_dark"] .text-slate-100,
+[data-theme="apple_dark"] .text-slate-200 {
+  color: #F5F5F7 !important;
+}
+
+[data-theme="apple_dark"] .text-slate-300,
+[data-theme="apple_dark"] .text-slate-400 {
+  color: #AEAEB2 !important;
+}
+
+[data-theme="apple_dark"] .text-slate-500,
+[data-theme="apple_dark"] .text-slate-600 {
+  color: #8E8E93 !important;
+}
+
+/* Apple Blue Primary Buttons -> White label on #0A84FF */
+[data-theme="apple_dark"] .bg-\[\#00F0FF\],
+[data-theme="apple_dark"] .bg-\[\#00F0FF\] * {
+  color: #FFFFFF !important;
+}
+
+[data-theme="apple_dark"] ::selection {
+  background-color: #0A84FF !important;
+  color: #FFFFFF !important;
+}
+
 

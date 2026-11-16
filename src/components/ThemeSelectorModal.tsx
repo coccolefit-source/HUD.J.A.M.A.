@@ -104,7 +104,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                   <span
                     className={`text-xs font-bold px-3 py-1 rounded-xl transition-colors ${
                       isSelected
-                        ? 'text-slate-950'
+                        ? (theme.isLight || theme.id === 'apple_dark' ? 'text-white' : 'text-slate-950')
                         : 'bg-slate-800 text-slate-300 group-hover:bg-slate-700'
                     }`}
                     style={isSelected ? { backgroundColor: theme.accentHex } : {}}
@@ -127,7 +127,9 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
           </span>
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl text-slate-950 font-bold text-xs transition-colors cursor-pointer"
+            className={`px-5 py-2 rounded-xl font-bold text-xs transition-colors cursor-pointer ${
+              activeTheme.isLight || activeTheme.id === 'apple_dark' ? 'text-white' : 'text-slate-950'
+            }`}
             style={{ backgroundColor: activeTheme.accentHex }}
           >
             Listo

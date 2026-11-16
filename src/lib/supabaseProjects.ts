@@ -40,7 +40,17 @@ export interface ProjectCloudPayload {
   phases?: ProjectPhase[];
 }
 
-export async function createCloudProject(project: ProjectCloudPayload): Promise<{ success: boolean; data?: any; error?: any }> {
+function extractMissingProjectColumn(error: any): string | null {
+  const msg = String(error?.message || error?.details || '');
+  if (!msg) return null;
+  const postgrestMatch = msg.match(/Could not find the '([^']+)' column/i);
+  if (postgrestMatch && postgrestMatch[1]) return postgrestMatch[1];
+  const pgMatch = msg.match(/column "([^"]+)"/i);
+  if (pgMatch && pgMatch[1]) return pgMatch[1];
+  return null;
+}
+
+export async function createCloudProject(project: ProjectCloudPayload): Promise<{ success: boolean; data?: any; error?: any; phasesMissingInCloud?: boolean }> {
   if (!isSupabaseConfigured) {
     return { success: false, error: 'Supabase no configurado' };
   }
@@ -53,7 +63,7 @@ export async function createCloudProject(project: ProjectCloudPayload): Promise<
     }
 
     const resolvedPhases = ensureProjectPhases(project.phases);
-    const payload: Record<string, any> = {
+    const attemptPayload: Record<string, any> = {
       title: project.title,
       description: project.description || '',
       status: project.status || 'Planificación',
@@ -64,15 +74,24 @@ export async function createCloudProject(project: ProjectCloudPayload): Promise<
       user_id: user.id
     };
 
-    console.log("PAYLOAD A INSERTAR (projects):", payload);
-    let { data, error } = await supabase.from('projects').insert([payload]).select();
+    let data: any[] | null = null;
+    let error: any = null;
+    let phasesMissingInCloud = false;
 
-    if (error && String(error.message || '').includes('phases')) {
-      const fallbackPayload = { ...payload };
-      delete fallbackPayload.phases;
-      const retry = await supabase.from('projects').insert([fallbackPayload]).select();
-      data = retry.data;
-      error = retry.error;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const res = await supabase.from('projects').insert([attemptPayload]).select();
+      data = res.data;
+      error = res.error;
+      if (!error) break;
+
+      const missingCol = extractMissingProjectColumn(error);
+      if (missingCol && missingCol in attemptPayload) {
+        if (missingCol === 'phases') phasesMissingInCloud = true;
+        console.warn(`Columna '${missingCol}' no existe en tabla projects al insertar, reintentando sin ella...`);
+        delete attemptPayload[missingCol];
+        continue;
+      }
+      break;
     }
 
     if (error) {
@@ -84,8 +103,7 @@ export async function createCloudProject(project: ProjectCloudPayload): Promise<
       saveLocalProjectPhasesBackup(String(data[0].id), resolvedPhases);
     }
 
-    console.log("Proyecto insertado exitosamente en Supabase:", data);
-    return { success: true, data: data ? data[0] : null };
+    return { success: true, data: data ? data[0] : null, phasesMissingInCloud };
   } catch (err: any) {
     console.error("Error al insertar proyecto:", err);
     return { success: false, error: err };
@@ -95,7 +113,7 @@ export async function createCloudProject(project: ProjectCloudPayload): Promise<
 export async function updateCloudProject(
   projectId: string,
   updates: Partial<ProjectCloudPayload>
-): Promise<{ success: boolean; data?: any; error?: any }> {
+): Promise<{ success: boolean; data?: any; error?: any; phasesMissingInCloud?: boolean }> {
   if (!isSupabaseConfigured || String(projectId).startsWith('guest_')) {
     return { success: true };
   }
@@ -104,47 +122,70 @@ export async function updateCloudProject(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { console.error("No hay usuario autenticado. Cancelando guardado de proyecto."); return { success: false, error: "Usuario no autenticado" }; }
 
-    const updatePayload: Record<string, any> = {};
-    if (updates.title !== undefined) updatePayload.title = updates.title;
-    if (updates.description !== undefined) updatePayload.description = updates.description;
-    if (updates.status !== undefined) updatePayload.status = updates.status;
-    if (updates.priority !== undefined) updatePayload.priority = updates.priority;
-    if (updates.progress !== undefined) updatePayload.progress = updates.progress;
-    if (updates.tasks !== undefined) updatePayload.tasks = updates.tasks;
+    const attemptPayload: Record<string, any> = {};
+    if (updates.title !== undefined) attemptPayload.title = updates.title;
+    if (updates.description !== undefined) attemptPayload.description = updates.description;
+    if (updates.status !== undefined) attemptPayload.status = updates.status;
+    if (updates.priority !== undefined) attemptPayload.priority = updates.priority;
+    if (updates.progress !== undefined) attemptPayload.progress = updates.progress;
+    if (updates.tasks !== undefined) attemptPayload.tasks = updates.tasks;
     if (updates.phases !== undefined) {
-      updatePayload.phases = updates.phases;
+      attemptPayload.phases = updates.phases;
       saveLocalProjectPhasesBackup(String(projectId), updates.phases);
     }
 
-    let { data, error } = await supabase
-      .from('projects')
-      .update(updatePayload)
-      .eq('id', projectId)
-      .eq('user_id', user.id)
-      .select();
+    let data: any[] | null = null;
+    let error: any = null;
+    let phasesMissingInCloud = false;
 
-    if (error && String(error.message || '').includes('phases')) {
-      const fallbackPayload = { ...updatePayload };
-      delete fallbackPayload.phases;
-      if (Object.keys(fallbackPayload).length === 0) {
-        return { success: true };
+    for (let attempt = 0; attempt < 8; attempt++) {
+      if (Object.keys(attemptPayload).length === 0) {
+        return { success: true, phasesMissingInCloud };
       }
-      const retry = await supabase
+
+      const res = await supabase
         .from('projects')
-        .update(fallbackPayload)
+        .update(attemptPayload)
         .eq('id', projectId)
         .eq('user_id', user.id)
-        .select();
-      data = retry.data;
-      error = retry.error;
+        .select('id');
+
+      data = res.data;
+      error = res.error;
+      if (!error) break;
+
+      const missingCol = extractMissingProjectColumn(error);
+      if (missingCol && missingCol in attemptPayload) {
+        if (missingCol === 'phases') phasesMissingInCloud = true;
+        console.warn(`Columna '${missingCol}' no existe en tabla projects al actualizar, reintentando sin ella...`);
+        delete attemptPayload[missingCol];
+        continue;
+      }
+      break;
     }
 
     if (error) {
       console.error('Error al actualizar proyecto en Supabase:', error);
-      return { success: false, error };
+      return { success: false, error, phasesMissingInCloud };
     }
 
-    return { success: true, data: data ? data[0] : null };
+    if (!data || data.length === 0) {
+      const { data: existingRow } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      if (existingRow) {
+        console.error('Supabase bloqueó la actualización del proyecto (posible política RLS de UPDATE):', projectId);
+        return {
+          success: false,
+          error: 'Supabase rechazó la actualización del proyecto (revisa la política RLS de UPDATE en la tabla projects).'
+        };
+      }
+    }
+
+    return { success: true, data: data ? data[0] : null, phasesMissingInCloud };
   } catch (err: any) {
     console.error('Error al actualizar proyecto en Supabase:', err);
     return { success: false, error: err };

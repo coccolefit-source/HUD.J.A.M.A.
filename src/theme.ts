@@ -1,4 +1,6 @@
 export type ThemeId = 
+  | 'apple_light'
+  | 'apple_dark'
   | 'jarvis_hud' 
   | 'arc_reactor' 
   | 'cobalt_hud' 
@@ -35,6 +37,48 @@ export interface ThemeConfig {
 }
 
 export const THEMES: ThemeConfig[] = [
+  {
+    id: 'apple_light',
+    name: 'Apple Claro (iOS / macOS)',
+    description: 'Estética nativa Apple en modo claro: fondo gris agrupado (#F2F2F7), tarjetas blancas puras (#FFFFFF), vidrio translúcido y Azul Apple (#007AFF).',
+    isLight: true,
+    primaryBg: 'bg-[#F2F2F7]',
+    cardBg: 'bg-white',
+    accentColor: 'blue',
+    accentHex: '#007AFF',
+    accentRgb: '0, 122, 255',
+    secondaryHex: '#5856D6',
+    secondaryRgb: '88, 86, 214',
+    bgColor: '#F2F2F7',
+    cardBgColor: '#FFFFFF',
+    accentGradient: 'from-[#007AFF] to-[#5856D6]',
+    badgeBg: 'bg-[#007AFF]/12 text-[#007AFF] border-[#007AFF]/25',
+    borderAccent: 'border-[#007AFF]/25',
+    textAccent: 'text-[#007AFF]',
+    glowColor: 'shadow-black/5',
+    previewColors: ['#FFFFFF', '#F2F2F7', '#007AFF']
+  },
+  {
+    id: 'apple_dark',
+    name: 'Apple Oscuro (iOS / macOS)',
+    description: 'Modo oscuro oficial de Apple: lienzo negro puro OLED (#000000), tarjetas grafito (#1C1C1E), controles elevados (#2C2C2E) y Azul Apple (#0A84FF).',
+    isLight: false,
+    primaryBg: 'bg-black',
+    cardBg: 'bg-[#1C1C1E]',
+    accentColor: 'blue',
+    accentHex: '#0A84FF',
+    accentRgb: '10, 132, 255',
+    secondaryHex: '#5E5CE6',
+    secondaryRgb: '94, 92, 230',
+    bgColor: '#000000',
+    cardBgColor: '#1C1C1E',
+    accentGradient: 'from-[#0A84FF] to-[#5E5CE6]',
+    badgeBg: 'bg-[#0A84FF]/15 text-[#0A84FF] border-[#0A84FF]/30',
+    borderAccent: 'border-[#38383A]',
+    textAccent: 'text-[#0A84FF]',
+    glowColor: 'shadow-black/40',
+    previewColors: ['#0A84FF', '#1C1C1E', '#000000']
+  },
   {
     id: 'blanco_magenta',
     name: 'Blanco Suave & Magenta (Claro)',
