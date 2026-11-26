@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Activity, User, Zap, X, RotateCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Habit, DailyLog, DailyProductivity, OneOnOneReview, SportsEntry, Project, ProjectTask, UserSession, UserProfileState, FocusSessionEntry, Idea } from './types';
+import { Habit, DailyLog, DailyProductivity, OneOnOneReview, SportsEntry, Project, ProjectTask, UserSession, UserProfileState, FocusSessionEntry, Idea, Client } from './types';
 import { 
   getStoredHabits, 
   saveStoredHabits, 
@@ -34,6 +34,7 @@ import { DailyTracker } from './components/DailyTracker/DailyTracker';
 import { AnalyticsTrends } from './components/Analytics/AnalyticsTrends';
 import { ReviewInsights } from './components/Review/ReviewInsights';
 import { ProjectsManager } from './components/Projects/ProjectsManager';
+import { ClientsManager } from './components/Clients/ClientsManager';
 import { ExecCenter } from './components/Exec/ExecCenter';
 import { FocusTimer } from './components/FocusTimer/FocusTimer';
 import { IdeasRadar } from './components/Ideas/IdeasRadar';
@@ -52,6 +53,7 @@ import { createDefaultProjectPhases, ensureProjectPhases, calculateProjectProgre
 import { fetchCloudDailyLogs, upsertCloudDailyLog } from './lib/supabaseDailyLogs';
 import { fetchCloudProductivity, upsertCloudProductivity } from './lib/supabaseProductivity';
 import { fetchCloudReviews, upsertCloudReview } from './lib/supabaseReviews';
+import { fetchCloudClients, createCloudClient, updateCloudClient, deleteCloudClient } from './lib/supabaseClients';
 
 function App() {
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -59,6 +61,10 @@ function App() {
   const [reviews, setReviews] = useState<OneOnOneReview[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [clientsError, setClientsError] = useState<string | null>(null);
+  const [clientsTableMissing, setClientsTableMissing] = useState(false);
   const [userSession, setUserSession] = useState<UserSession>(getStoredUserSession());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [loading, setLoading] = useState(isSupabaseConfigured);
@@ -1084,6 +1090,9 @@ function App() {
       setHabits([]);
       setProjects([]);
       setIdeas([]);
+      setClients([]);
+      setClientsError(null);
+      setClientsTableMissing(false);
       setReviews([]);
       setLogs({});
       setUserSession(null as any);
@@ -1094,6 +1103,66 @@ function App() {
       console.error("Error al cerrar sesión:", error);
     }
   }, []);
+
+  const handleRefreshClients = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    setClientsLoading(true);
+    try {
+      const res = await fetchCloudClients();
+      if (res.success && res.data) {
+        setClients(res.data);
+        setClientsError(null);
+        setClientsTableMissing(false);
+      } else {
+        setClientsError(res.error || 'Error al cargar clientes desde Supabase.');
+        setClientsTableMissing(Boolean(res.tableMissing));
+      }
+    } finally {
+      setClientsLoading(false);
+    }
+  }, []);
+
+  const handleCreateClient = useCallback(async (payload: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const res = await createCloudClient(payload);
+    if (res.success && res.data) {
+      setClients(prev => [res.data!, ...prev]);
+      setClientsError(null);
+      setClientsTableMissing(false);
+      showToast('Cliente guardado en Supabase.');
+      return { success: true };
+    }
+    setClientsError(res.error || 'No se pudo crear el cliente.');
+    setClientsTableMissing(Boolean(res.tableMissing));
+    return { success: false, error: res.error };
+  }, [showToast]);
+
+  const handleUpdateClient = useCallback(async (clientId: string, payload: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const res = await updateCloudClient(clientId, payload);
+    if (res.success && res.data) {
+      setClients(prev => prev.map(c => (c.id === clientId ? res.data! : c)));
+      setClientsError(null);
+      setClientsTableMissing(false);
+      showToast('Cliente actualizado en la nube.');
+      return { success: true };
+    }
+    setClientsError(res.error || 'No se pudo actualizar el cliente.');
+    setClientsTableMissing(Boolean(res.tableMissing));
+    return { success: false, error: res.error };
+  }, [showToast]);
+
+  const handleDeleteClient = useCallback(async (clientId: string) => {
+    const res = await deleteCloudClient(clientId);
+    if (res.success) {
+      setClients(prev => prev.filter(c => c.id !== clientId));
+      setClientsError(null);
+      setClientsTableMissing(false);
+      showToast('Cliente eliminado de Supabase.');
+      return { success: true };
+    }
+    setClientsError(res.error || 'No se pudo eliminar el cliente.');
+    setClientsTableMissing(Boolean(res.tableMissing));
+    return { success: false, error: res.error };
+  }, [showToast]);
 
   const loadAllUserData = useCallback(async (userId: string, force = false) => {
     if (!isSupabaseConfigured || !userId) return;
@@ -1109,14 +1178,15 @@ function App() {
         return res;
       };
 
-      const [habitsRes, tasksRes, projectsRes, ideasRes, dailyLogsData, productivityData, reviewsData] = await Promise.all([
+      const [habitsRes, tasksRes, projectsRes, ideasRes, dailyLogsData, productivityData, reviewsData, clientsRes] = await Promise.all([
         fetchHabitsWithFallback(),
         supabase.from('tasks').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(2000),
         supabase.from('projects').select('*').eq('user_id', userId),
         supabase.from('ideas').select('*').eq('user_id', userId),
         fetchCloudDailyLogs(userId),
         fetchCloudProductivity(userId),
-        fetchCloudReviews(userId)
+        fetchCloudReviews(userId),
+        fetchCloudClients(userId)
       ]);
 
       if (tasksRes.error) console.error('Error cargando tareas desde Supabase:', tasksRes.error);
@@ -1333,6 +1403,15 @@ function App() {
       if (reviewsData && Array.isArray(reviewsData)) {
         setReviews(reviewsData);
       }
+
+      if (clientsRes.success && clientsRes.data) {
+        setClients(clientsRes.data);
+        setClientsError(null);
+        setClientsTableMissing(false);
+      } else {
+        setClientsError(clientsRes.error || null);
+        setClientsTableMissing(Boolean(clientsRes.tableMissing));
+      }
     } catch(err) {
       console.error("Error al cargar todos los datos de usuario:", err);
     } finally {
@@ -1491,6 +1570,13 @@ function App() {
             }
           }
         )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'clients' },
+          () => {
+            handleRefreshClients();
+          }
+        )
         .subscribe();
     });
 
@@ -1500,7 +1586,7 @@ function App() {
         supabase.removeChannel(channel);
       }
     };
-  }, [loadAllUserData, isAuthenticated]);
+  }, [loadAllUserData, handleRefreshClients, isAuthenticated]);
 
   useEffect(() => {
     localStorage.removeItem('hide_proj_other');
@@ -1547,6 +1633,9 @@ function App() {
           setHabits([]);
           setProjects([]);
           setIdeas([]);
+          setClients([]);
+          setClientsError(null);
+          setClientsTableMissing(false);
           setReviews([]);
           setLogs({});
           setUserSession(getStoredUserSession());
@@ -1679,6 +1768,18 @@ function App() {
          {activeTab === 'tracker' && <DailyTracker habits={habits} logs={logs} projects={projects} onSaveProject={handleSaveProject} onToggleHabit={handleToggleHabit} onSaveHabit={handleSaveHabit} onDeleteHabit={handleDeleteHabit} onCloseDay={handleCloseDay} onSaveDailyWins={handleSaveDailyWins} onSaveSportsEntry={handleSaveSportsEntry} onDeleteSportsEntry={handleDeleteSportsEntry} onSaveProductivity={handleSaveProductivity} onMoveHabit={handleMoveHabit} onReorderHabits={handleReorderHabits} calculateStreak={calculateStreak} />}
          {activeTab === 'exec' && <ExecCenter projects={projects} onSaveProject={handleSaveProject} onUpdateProjects={setProjects} onDeleteTask={handleDeleteTask} />}
          {activeTab === 'projects' && <ProjectsManager projects={projects} onSaveProject={handleSaveProject} onDeleteProject={handleDeleteProject} />}
+         {activeTab === 'clients' && (
+           <ClientsManager
+             clients={clients}
+             isLoading={clientsLoading}
+             cloudError={clientsError}
+             tableMissing={clientsTableMissing}
+             onRefreshClients={handleRefreshClients}
+             onCreateClient={handleCreateClient}
+             onUpdateClient={handleUpdateClient}
+             onDeleteClient={handleDeleteClient}
+           />
+         )}
          {activeTab === 'analytics' && <AnalyticsTrends habits={habits} logs={logs} calculateStreak={calculateStreak} />}
          {activeTab === 'review' && <ReviewInsights habits={habits} logs={logs} reviews={reviews} onSaveReview={handleSaveReview} />}
          {activeTab === 'focus' && <FocusTimer onFocusSessionComplete={handleFocusSessionComplete} todaySessions={logs[getTodayISO()]?.focusSessions || []} />}

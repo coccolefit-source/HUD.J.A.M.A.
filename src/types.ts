@@ -166,3 +166,74 @@ export interface Project {
   createdAt: string;
   updatedAt?: string;
 }
+
+export type ClientSegment = 'prospect' | 'active' | 'followup';
+
+export type ProspectStage =
+  | 'contacto_inicial'
+  | 'diagnostico'
+  | 'propuesta_enviada'
+  | 'negociacion'
+  | 'listo_para_pago';
+
+export type DevelopmentStage =
+  | 'onboarding'
+  | 'diseno_ux'
+  | 'desarrollo_mvp'
+  | 'pruebas_qa'
+  | 'capacitacion_entrega';
+
+export type PaymentStatus = 'up_to_date' | 'pending' | 'overdue';
+
+export type BillingCycle =
+  | 'mensual'
+  | 'quincenal'
+  | 'trimestral'
+  | 'semestral'
+  | 'anual'
+  | 'personalizado';
+
+export interface ClientMonthlyReview {
+  id: string;
+  date: string; // YYYY-MM-DD
+  salesAmount: number;
+  inventoryStatus: string;
+  notes: string;
+}
+
+export interface ClientPaymentRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  amount: number;
+  nextPaymentDate: string; // YYYY-MM-DD
+  notes?: string;
+}
+
+export interface Client {
+  id: string;
+  name: string;
+  company?: string;
+  phone: string;
+  email?: string;
+  projectName?: string;
+  segment: ClientSegment;
+  prospectStage: ProspectStage;
+  devStage: DevelopmentStage;
+  devProgress: number; // 0 - 100
+  monthlyFee: number;
+  setupFee?: number;
+  currency: string; // e.g., 'COP', 'USD', 'MXN'
+  billingCycle: BillingCycle;
+  paymentStatus: PaymentStatus;
+  lastPaymentDate?: string; // YYYY-MM-DD
+  nextPaymentDate?: string; // YYYY-MM-DD
+  nextMeetingDate?: string; // YYYY-MM-DD
+  lastSalesAmount?: number;
+  lastInventoryNote?: string;
+  notes?: string;
+  monthlyReviews: ClientMonthlyReview[];
+  paymentHistory: ClientPaymentRecord[];
+  createdAt: string;
+  updatedAt?: string;
+}
+

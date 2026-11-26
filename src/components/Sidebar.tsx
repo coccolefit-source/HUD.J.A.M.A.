@@ -18,13 +18,14 @@ import {
   Radar,
   LogOut,
   User,
+  Users,
   RotateCw
 } from 'lucide-react';
 import { getRankInfo } from '../utils/gamification';
 
 import { UserSession } from '../types';
 
-export type TabType = 'tracker' | 'exec' | 'projects' | 'analytics' | 'review' | 'focus' | 'ideas';
+export type TabType = 'tracker' | 'exec' | 'projects' | 'clients' | 'analytics' | 'review' | 'focus' | 'ideas';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -105,6 +106,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'PROYECTOS',
       subtitle: 'Hitos & Seguimiento',
       icon: FolderKanban,
+      color: 'text-[#00F0FF]'
+    },
+    {
+      id: 'clients' as TabType,
+      label: 'CLIENTES',
+      subtitle: 'Prospectos, Activos y Cobros',
+      icon: Users,
       color: 'text-[#00F0FF]'
     },
     {
