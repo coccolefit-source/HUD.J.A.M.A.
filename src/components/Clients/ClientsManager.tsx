@@ -24,23 +24,29 @@ import {
   TrendingUp,
   CreditCard,
   Database,
+  FileText,
+  FolderOpen,
 } from 'lucide-react';
 import {
   BillingCycle,
   Client,
   ClientMonthlyReview,
   ClientPaymentRecord,
+  ClientProjectStep,
   ClientSegment,
   DevelopmentStage,
   PaymentStatus,
   ProspectStage,
 } from '../../types';
 import { getTodayISO } from '../../utils/dateUtils';
+import { calculateClientProjectMetrics } from '../../utils/clientProjectTemplate';
+import { ClientProjectWorkspaceModal } from './ClientProjectWorkspaceModal';
 
 type ClientsSubTab = 'prospects' | 'active' | 'followup' | 'receivables';
 
 interface ClientsManagerProps {
   clients: Client[];
+  senderName?: string;
   isLoading?: boolean;
   cloudError?: string | null;
   tableMissing?: boolean;
@@ -232,44 +238,82 @@ function buildWhatsAppUrl(phone: string, message: string): string {
   return `https://wa.me/?text=${encoded}`;
 }
 
-function buildClientStatusMessage(client: Client, kind: 'prospect' | 'active' | 'followup' | 'payment'): string {
-  const projectLabel = client.projectName ? ` (${client.projectName})` : '';
-  const companyLabel = client.company ? ` - ${client.company}` : '';
+type WhatsAppTemplateKind =
+  | 'welcome_diagnostic'
+  | 'setup_day0'
+  | 'ready_day2'
+  | 'manager_meeting'
+  | 'quote'
+  | 'payment';
 
-  if (kind === 'prospect') {
-    const stageInfo =
-      PROSPECT_STAGES.find((s) => s.id === client.prospectStage) || PROSPECT_STAGES[0];
+const E_PRIME_QUOTE_MESSAGE = `¡Hola! Qué gusto saludarte 👋 Somos el equipo de e-prime.
+Organizamos las ventas y el inventario de tu negocio dejándote un sistema fácil de usar en tu celular vestido con el logo y nombre de tu marca en menos de 48 horas. Además, un Gerente de nuestro equipo se reúne contigo para revisar tus números y ayudarte a ganar más plata.
+Tenemos 3 planes mensuales según qué tan seguido quieras reunirte con el Gerente:
+🔹 Plan Esencial — $150.000/mes
+Sistema con tu marca + 1 reunión al mes (30 min) con un Gerente.
+⭐ Plan Crecimiento — $200.000/mes (Más elegido)
+Sistema con tu marca + 2 reuniones quincenales con un Gerente + alertas de inventario quieto.
+🔹 Plan Control Total — $300.000/mes
+Sistema con tu marca + 4 reuniones semanales con un Gerente + hasta 2 cajas.
+🎁 Beneficio Cupo Fundador (Esta semana): El montaje inicial de todo tu catálogo normalmente vale $450.000, pero te sale 100% GRATIS arrancando con tus primeros 2 meses por adelantado. Con qué plan te gustaría que empezáramos o prefieres que hagamos una llamada rápida de 10 minutos para recomendarte el ideal?`;
+
+function resolveSenderDisplayName(senderName?: string): string {
+  const cleaned = (senderName || '').replace(/^HUD\s+/i, '').trim();
+  if (!cleaned || cleaned.toUpperCase() === 'INVITADO' || cleaned.toUpperCase() === 'OPERADOR') {
+    return '[Tu Nombre]';
+  }
+  return cleaned;
+}
+
+function buildClientStatusMessage(
+  client: Client,
+  kind: WhatsAppTemplateKind,
+  senderName?: string
+): string {
+  const clientName = client.name?.trim() || '[Nombre]';
+  const businessName =
+    client.company?.trim() || client.projectName?.trim() || '[Negocio]';
+  const sender = resolveSenderDisplayName(senderName);
+
+  if (kind === 'quote') {
+    return E_PRIME_QUOTE_MESSAGE;
+  }
+
+  if (kind === 'welcome_diagnostic') {
     return (
-      `Hola ${client.name}, te comparto el estado actual de tu proyecto de software${projectLabel}${companyLabel}:\n\n` +
-      `Etapa actual: ${stageInfo.label} (Paso ${stageInfo.step} de ${PROSPECT_STAGES.length})\n` +
-      `Siguiente paso: ${stageInfo.nextStepText}.\n\n` +
-      `Quedo atento para avanzar cuando gustes.`
+      `Hola ${clientName}, ¿cómo vas? Te saluda ${sender} del equipo de e-prime. ` +
+      `Ya tenemos todo listo para revisar cómo estás llevando hoy las cuentas de ${businessName}. ` +
+      `Agendemos una llamada corta de 15 minutos para conocer tus productos y mostrarte cómo te vamos a organizar todo. ` +
+      `¿Te queda bien hoy a las [Hora] o mañana en la mañana?`
     );
   }
 
-  if (kind === 'active') {
-    const devInfo = DEV_STAGES.find((s) => s.id === client.devStage) || DEV_STAGES[0];
+  if (kind === 'setup_day0') {
     return (
-      `Hola ${client.name}, aquí tienes el avance actualizado de tu app${projectLabel}:\n\n` +
-      `Estado de desarrollo: ${devInfo.label}\n` +
-      `Progreso estimado: ${client.devProgress}%\n` +
-      `Próximo hito: ${devInfo.nextStepText}.\n\n` +
-      `Cualquier detalle o ajuste me cuentas por aquí.`
+      `¡Listo, ${clientName}! Ya recibimos el logo y los precios de ${businessName}. ` +
+      `Nuestro equipo ya empezó a montar tu sistema personalizado y a cargar tus productos con sus costos reales. ` +
+      `En menos de 48 horas te lo entregamos funcionando para que lo manejes desde tu celular. ` +
+      `Apenas quede listo te aviso por aquí para coordinar la entrega.`
     );
   }
 
-  if (kind === 'followup') {
-    const meetingText = client.nextMeetingDate
-      ? `Nuestra próxima reunión mensual de revisión de ventas e inventario está programada para el ${formatDateFriendly(client.nextMeetingDate)}.`
-      : `Te escribo para coordinar nuestra reunión mensual de revisión de números de ventas e inventario.`;
-    const lastReview =
-      client.lastSalesAmount !== undefined
-        ? `\nÚltimo registro de ventas: ${formatMoney(client.lastSalesAmount, client.currency)}.`
-        : '';
+  if (kind === 'ready_day2') {
     return (
-      `Hola ${client.name}, ¿cómo va todo con tu app${projectLabel}?\n\n` +
-      `${meetingText}${lastReview}\n` +
-      `¿Te funciona esa fecha o prefieres otro horario?`
+      `¡Buenas noticias, ${clientName}! Ya quedó listo el sistema de ${businessName} con tu logo, tus precios y tus costos cargados. ` +
+      `El siguiente paso es una sesión rápida de 15 minutos para entregártelo en tu celular y enseñarte cómo registrar ventas y cerrar caja en segundos. ` +
+      `¿A qué hora te queda bien hoy o mañana?`
+    );
+  }
+
+  if (kind === 'manager_meeting') {
+    const meetingDate = client.nextMeetingDate
+      ? formatDateFriendly(client.nextMeetingDate)
+      : '[Fecha]';
+    return (
+      `Hola ${clientName}, ¿cómo va todo con los registros en ${businessName}? ` +
+      `Te escribo para confirmar nuestra próxima sesión de 30 minutos con el Gerente de e-prime este ${meetingDate}, ` +
+      `donde vamos a revisar cuánto vendiste, qué te dejó más ganancia y cómo va tu inventario. ` +
+      `¿Te funciona ese día o prefieres que la movamos de horario?`
     );
   }
 
@@ -278,7 +322,7 @@ function buildClientStatusMessage(client: Client, kind: 'prospect' | 'active' | 
     ? formatDateFriendly(client.nextPaymentDate)
     : 'próximamente';
   return (
-    `Hola ${client.name}, te escribo con un recordatorio amable del pago de tu servicio${projectLabel}:\n\n` +
+    `Hola ${clientName}, te escribo con un recordatorio amable del pago de tu sistema en ${businessName}:\n\n` +
     `Monto: ${formatMoney(client.monthlyFee, client.currency)}\n` +
     `Fecha de pago: ${dueText}\n\n` +
     `Apenas realices el pago me envías el comprobante para dejarlo registrado y programar tu siguiente ciclo. ¡Muchas gracias!`
@@ -305,6 +349,7 @@ function toClientPayload(client: Client): Omit<Client, 'id' | 'createdAt' | 'upd
 
 export const ClientsManager: React.FC<ClientsManagerProps> = ({
   clients,
+  senderName,
   isLoading = false,
   cloudError = null,
   tableMissing = false,
@@ -320,6 +365,39 @@ export const ClientsManager: React.FC<ClientsManagerProps> = ({
   const [expandedHistoryIds, setExpandedHistoryIds] = useState<Record<string, boolean>>({});
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyClientId, setBusyClientId] = useState<string | null>(null);
+
+  // Quick Quote Modal (e-prime 3 plans + Cupo Fundador)
+  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+  const [quotePhone, setQuotePhone] = useState('');
+
+  // Step-by-Step Client Project Workspace Modal
+  const [projectWorkspaceClientId, setProjectWorkspaceClientId] = useState<string | null>(null);
+  const activeProjectClient = useMemo(
+    () =>
+      projectWorkspaceClientId
+        ? clients.find((c) => c.id === projectWorkspaceClientId) || null
+        : null,
+    [clients, projectWorkspaceClientId]
+  );
+
+  const handleSaveClientProjectSteps = async (
+    client: Client,
+    nextSteps: ClientProjectStep[],
+    devProgress: number,
+    devStage: DevelopmentStage
+  ) => {
+    setActionError(null);
+    const res = await onUpdateClient(client.id, {
+      ...toClientPayload(client),
+      projectSteps: nextSteps,
+      devProgress,
+      devStage,
+    });
+    if (!res.success && res.error) {
+      setActionError(res.error);
+    }
+    return res;
+  };
 
   // Add / Edit Client Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -743,7 +821,19 @@ export const ClientsManager: React.FC<ClientsManagerProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setQuotePhone('');
+              setIsQuoteModalOpen(true);
+            }}
+            className="px-3.5 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+            title="Enviar o copiar cotización oficial de planes e-prime"
+          >
+            <FileText className="w-3.5 h-3.5 shrink-0" />
+            <span>Cotización WA</span>
+          </button>
           <button
             type="button"
             onClick={() => onRefreshClients()}
@@ -892,16 +982,26 @@ export const ClientsManager: React.FC<ClientsManagerProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {displayedClients.map((client) => {
             const isBusy = busyClientId === client.id;
-            const waKind =
+            const isReadyForDelivery =
+              client.devStage === 'capacitacion_entrega' || client.devProgress >= 90;
+            const waKind: WhatsAppTemplateKind =
               activeSubTab === 'receivables'
                 ? 'payment'
                 : activeSubTab === 'followup'
-                ? 'followup'
+                ? 'manager_meeting'
                 : activeSubTab === 'active'
-                ? 'active'
-                : 'prospect';
-            const waMessage = buildClientStatusMessage(client, waKind);
+                ? isReadyForDelivery
+                  ? 'ready_day2'
+                  : 'setup_day0'
+                : 'welcome_diagnostic';
+            const waMessage = buildClientStatusMessage(client, waKind, senderName);
             const waUrl = buildWhatsAppUrl(client.phone, waMessage);
+            const waQuoteMessage = buildClientStatusMessage(client, 'quote', senderName);
+            const waQuoteUrl = buildWhatsAppUrl(client.phone, waQuoteMessage);
+            const waDay0Message = buildClientStatusMessage(client, 'setup_day0', senderName);
+            const waDay0Url = buildWhatsAppUrl(client.phone, waDay0Message);
+            const waDay2Message = buildClientStatusMessage(client, 'ready_day2', senderName);
+            const waDay2Url = buildWhatsAppUrl(client.phone, waDay2Message);
             const copyKey = `${client.id}-${waKind}`;
             const isHistoryOpen = Boolean(expandedHistoryIds[client.id]);
 
@@ -1050,13 +1150,29 @@ export const ClientsManager: React.FC<ClientsManagerProps> = ({
                   {/* CLIENTES ACTIVOS: Development stage tracker + cyclic payment date */}
                   {activeSubTab === 'active' && (
                     <div className="pt-2 border-t border-slate-800 space-y-2.5">
-                      <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center justify-between gap-2 text-xs">
                         <span className="font-semibold text-slate-300">
                           Desarrollo de la App
                         </span>
-                        <span className="text-[#00F0FF] font-black tabular-nums">
-                          {client.devProgress}%
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[#00F0FF] font-black tabular-nums">
+                            {client.devProgress}%
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setProjectWorkspaceClientId(client.id)}
+                            className="px-2.5 py-1 rounded-lg bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/45 text-[#00F0FF] text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap"
+                            title="Abrir el paso a paso del proyecto, tareas mías/del cliente y notas"
+                          >
+                            <FolderOpen className="w-3.5 h-3.5" />
+                            <span>
+                              Abrir Proyecto
+                              {client.projectSteps && client.projectSteps.length > 0
+                                ? ` (${calculateClientProjectMetrics(client.projectSteps).completed}/${calculateClientProjectMetrics(client.projectSteps).total})`
+                                : ''}
+                            </span>
+                          </button>
+                        </div>
                       </div>
 
                       <div className="w-full h-2 rounded-full bg-[#0A0D14] border border-slate-800 overflow-hidden">
@@ -1301,54 +1417,153 @@ export const ClientsManager: React.FC<ClientsManagerProps> = ({
                   )}
                 </div>
 
-                {/* Action Bar: WhatsApp Status Button + Sub-tab Primary Action */}
+                {/* Action Bar: WhatsApp Flow Buttons + Sub-tab Primary Action */}
                 <div className="pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
                   {/* WhatsApp & Copy controls */}
-                  <div className="flex items-center gap-1.5">
-                    <a
-                      href={waUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
-                      title="Abrir WhatsApp con el mensaje del estado actual"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span>
-                        {activeSubTab === 'prospects'
-                          ? 'WhatsApp Estado'
-                          : activeSubTab === 'active'
-                          ? 'WhatsApp Avance'
-                          : activeSubTab === 'followup'
-                          ? 'WhatsApp Reunión'
-                          : 'WhatsApp Cobro'}
-                      </span>
-                    </a>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {activeSubTab === 'prospects' && (
+                      <>
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                          title="Enviar mensaje de Bienvenida y Diagnóstico (15 min) por WhatsApp"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>WA Bienvenida</span>
+                        </a>
+                        <a
+                          href={waQuoteUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                          title="Enviar cotización oficial de los 3 planes e-prime + Cupo Fundador"
+                        >
+                          <FileText className="w-3.5 h-3.5 shrink-0" />
+                          <span>WA Cotización</span>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyMessage(copyKey, waMessage)}
+                          className="p-2 rounded-xl bg-[#0A0D14] hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                          title="Copiar mensaje de Bienvenida y Diagnóstico"
+                        >
+                          {copiedId === copyKey ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </>
+                    )}
 
-                    <button
-                      type="button"
-                      onClick={() => handleCopyMessage(copyKey, waMessage)}
-                      className="p-2 rounded-xl bg-[#0A0D14] hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
-                      title="Copiar mensaje de WhatsApp"
-                    >
-                      {copiedId === copyKey ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
+                    {activeSubTab === 'active' && (
+                      <>
+                        <a
+                          href={waDay0Url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
+                            !isReadyForDelivery
+                              ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/40 text-emerald-400'
+                              : 'bg-[#0A0D14] hover:bg-emerald-500/15 border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-400'
+                          }`}
+                          title="Enviar Confirmación de Montaje (Día 0, tras recibir pago, logo y precios)"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>WA Día 0 Montaje</span>
+                        </a>
+                        <a
+                          href={waDay2Url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
+                            isReadyForDelivery
+                              ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/40 text-emerald-400'
+                              : 'bg-[#0A0D14] hover:bg-emerald-500/15 border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-400'
+                          }`}
+                          title="Enviar Sistema Listo para Entregar (Día 2)"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>WA Día 2 Listo</span>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyMessage(copyKey, waMessage)}
+                          className="p-2 rounded-xl bg-[#0A0D14] hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                          title={
+                            isReadyForDelivery
+                              ? 'Copiar mensaje de Sistema Listo (Día 2)'
+                              : 'Copiar mensaje de Confirmación de Montaje (Día 0)'
+                          }
+                        >
+                          {copiedId === copyKey ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </>
+                    )}
+
+                    {(activeSubTab === 'followup' || activeSubTab === 'receivables') && (
+                      <>
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                          title={
+                            activeSubTab === 'followup'
+                              ? 'Enviar Recordatorio de Reunión con el Gerente de e-prime'
+                              : 'Enviar recordatorio de cobro por WhatsApp'
+                          }
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>
+                            {activeSubTab === 'followup'
+                              ? 'WA Reunión Gerente'
+                              : 'WA Cobro'}
+                          </span>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyMessage(copyKey, waMessage)}
+                          className="p-2 rounded-xl bg-[#0A0D14] hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                          title="Copiar mensaje de WhatsApp"
+                        >
+                          {copiedId === copyKey ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </>
+                    )}
                   </div>
 
                   {/* Contextual Workflow Transition / Payment Action */}
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {activeSubTab === 'prospects' && (
-                      <button
-                        type="button"
-                        onClick={() => openPaymentModal(client, true)}
-                        className="px-3 py-2 rounded-xl bg-[#00F0FF] hover:bg-[#00F0FF]/90 text-[#0A0D14] text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-                      >
-                        <DollarSign className="w-3.5 h-3.5 stroke-[2.5]" />
-                        <span>Pagó → Activar</span>
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setProjectWorkspaceClientId(client.id)}
+                          className="px-3 py-2 rounded-xl bg-[#0A0D14] hover:border-[#00F0FF]/50 border border-slate-800 text-slate-200 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                        >
+                          <FolderOpen className="w-3.5 h-3.5 text-[#00F0FF]" />
+                          <span>Abrir Proyecto</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openPaymentModal(client, true)}
+                          className="px-3 py-2 rounded-xl bg-[#00F0FF] hover:bg-[#00F0FF]/90 text-[#0A0D14] text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                        >
+                          <DollarSign className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Pagó → Activar</span>
+                        </button>
+                      </>
                     )}
 
                     {activeSubTab === 'active' && (
@@ -1383,6 +1598,14 @@ export const ClientsManager: React.FC<ClientsManagerProps> = ({
 
                     {activeSubTab === 'followup' && (
                       <>
+                        <button
+                          type="button"
+                          onClick={() => setProjectWorkspaceClientId(client.id)}
+                          className="px-3 py-2 rounded-xl bg-[#0A0D14] hover:border-[#00F0FF]/50 border border-slate-800 text-slate-200 text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                        >
+                          <FolderOpen className="w-3.5 h-3.5 text-[#00F0FF]" />
+                          <span>Abrir Proyecto</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => openPaymentModal(client, false)}
@@ -1984,6 +2207,89 @@ export const ClientsManager: React.FC<ClientsManagerProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* MODAL: Cotización Oficial e-prime (WhatsApp rápido / Copiar) */}
+      {isQuoteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#101827] border border-emerald-500/40 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <h2 className="text-base font-bold text-slate-100">
+                    Cotización Oficial e-prime
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Envía los 3 planes mensuales y el Beneficio Cupo Fundador por WhatsApp
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsQuoteModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                WhatsApp del cliente (opcional)
+              </label>
+              <input
+                type="tel"
+                value={quotePhone}
+                onChange={(e) => setQuotePhone(e.target.value)}
+                placeholder="Ej: 573001234567 (si lo dejas vacío, eliges el contacto en WhatsApp)"
+                className="w-full px-3 py-2 bg-[#0A0D14] border border-slate-800 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-emerald-400 font-mono"
+              />
+            </div>
+
+            <div className="p-4 rounded-xl bg-[#0A0D14] border border-slate-800 text-xs text-slate-200 whitespace-pre-line leading-relaxed max-h-72 overflow-y-auto">
+              {E_PRIME_QUOTE_MESSAGE}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => handleCopyMessage('global-eprime-quote', E_PRIME_QUOTE_MESSAGE)}
+                className="px-4 py-2 rounded-xl bg-[#0A0D14] hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+              >
+                {copiedId === 'global-eprime-quote' ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-400">Copiado</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copiar texto</span>
+                  </>
+                )}
+              </button>
+              <a
+                href={buildWhatsAppUrl(quotePhone, E_PRIME_QUOTE_MESSAGE)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-[#0A0D14] font-bold text-xs flex items-center gap-1.5 transition-colors"
+              >
+                <MessageCircle className="w-4 h-4 stroke-[2.5]" />
+                <span>Enviar por WhatsApp</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Proyecto del Cliente (Paso a Paso, Mis Tareas vs Cliente, Notas) */}
+      {activeProjectClient && (
+        <ClientProjectWorkspaceModal
+          client={activeProjectClient}
+          onClose={() => setProjectWorkspaceClientId(null)}
+          onSaveProjectSteps={handleSaveClientProjectSteps}
+        />
       )}
     </div>
   );

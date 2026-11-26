@@ -4,6 +4,7 @@ import {
   Client,
   ClientMonthlyReview,
   ClientPaymentRecord,
+  ClientProjectStep,
   ClientSegment,
   DevelopmentStage,
   PaymentStatus,
@@ -26,6 +27,15 @@ function isTableMissingError(error: any): boolean {
     msg.includes('Could not find the table') ||
     msg.includes('relation "public.clients" does not exist') ||
     msg.includes('relation "clients" does not exist')
+  );
+}
+
+function isProjectStepsColumnMissingError(error: any): boolean {
+  const code = String(error?.code || '');
+  const msg = String(error?.message || error?.details || '');
+  return (
+    (code === '42703' || code === 'PGRST204') &&
+    msg.includes('project_steps')
   );
 }
 
@@ -75,6 +85,9 @@ function mapRowToClient(row: any): Client {
   const paymentHistory: ClientPaymentRecord[] = Array.isArray(row.payment_history)
     ? row.payment_history
     : [];
+  const projectSteps: ClientProjectStep[] = Array.isArray(row.project_steps)
+    ? row.project_steps
+    : [];
 
   return {
     id: String(row.id),
@@ -106,13 +119,18 @@ function mapRowToClient(row: any): Client {
     notes: row.notes || '',
     monthlyReviews,
     paymentHistory,
+    projectSteps,
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || new Date().toISOString(),
   };
 }
 
-function mapClientToPayload(client: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>, userId: string) {
-  return {
+function mapClientToPayload(
+  client: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>,
+  userId: string,
+  includeProjectSteps = true
+) {
+  const base: Record<string, any> = {
     user_id: userId,
     name: client.name.trim(),
     company: client.company?.trim() || null,
@@ -140,6 +158,12 @@ function mapClientToPayload(client: Omit<Client, 'id' | 'createdAt' | 'updatedAt
     monthly_reviews: Array.isArray(client.monthlyReviews) ? client.monthlyReviews : [],
     payment_history: Array.isArray(client.paymentHistory) ? client.paymentHistory : [],
   };
+
+  if (includeProjectSteps && Array.isArray(client.projectSteps) && client.projectSteps.length > 0) {
+    base.project_steps = client.projectSteps;
+  }
+
+  return base;
 }
 
 /**
@@ -205,8 +229,15 @@ export async function createCloudClient(
       return { success: false, error: 'Debes iniciar sesión para guardar clientes en la nube.' };
     }
 
-    const payload = mapClientToPayload(client, user.id);
-    const { data, error } = await supabase.from('clients').insert([payload]).select().single();
+    const payload = mapClientToPayload(client, user.id, true);
+    let { data, error } = await supabase.from('clients').insert([payload]).select().single();
+
+    if (error && isProjectStepsColumnMissingError(error)) {
+      const fallbackPayload = mapClientToPayload(client, user.id, false);
+      const retry = await supabase.from('clients').insert([fallbackPayload]).select().single();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error('Error al crear cliente en Supabase:', error);
@@ -245,7 +276,7 @@ export async function updateCloudClient(
     }
 
     const payload = {
-      ...mapClientToPayload(client, user.id),
+      ...mapClientToPayload(client, user.id, true),
       updated_at: new Date().toISOString(),
     };
 
@@ -258,6 +289,13 @@ export async function updateCloudClient(
       .single();
 
     if (error) {
+      if (isProjectStepsColumnMissingError(error)) {
+        return {
+          success: false,
+          error:
+            'Falta agregar la columna project_steps en Supabase. Ejecuta el SQL ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS project_steps jsonb NOT NULL DEFAULT \'[]\'::jsonb;',
+        };
+      }
       console.error('Error al actualizar cliente en Supabase:', error);
       return {
         success: false,

@@ -209,6 +209,30 @@ export interface ClientPaymentRecord {
   notes?: string;
 }
 
+export type ProjectTaskOwner = 'me' | 'client';
+
+export interface ClientProjectTask {
+  id: string;
+  title: string;
+  owner: ProjectTaskOwner;
+  completed: boolean;
+}
+
+export interface ClientProjectStepNote {
+  id: string;
+  text: string;
+  createdAt: string; // ISO timestamp
+}
+
+export interface ClientProjectStep {
+  id: DevelopmentStage;
+  stepNumber: number;
+  title: string;
+  subtitle: string;
+  tasks: ClientProjectTask[];
+  notes: ClientProjectStepNote[];
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -233,6 +257,7 @@ export interface Client {
   notes?: string;
   monthlyReviews: ClientMonthlyReview[];
   paymentHistory: ClientPaymentRecord[];
+  projectSteps?: ClientProjectStep[];
   createdAt: string;
   updatedAt?: string;
 }

@@ -1771,6 +1771,7 @@ function App() {
          {activeTab === 'clients' && (
            <ClientsManager
              clients={clients}
+             senderName={userSession?.alias || userSession?.hudName}
              isLoading={clientsLoading}
              cloudError={clientsError}
              tableMissing={clientsTableMissing}
