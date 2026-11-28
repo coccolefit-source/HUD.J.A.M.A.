@@ -246,16 +246,25 @@ type WhatsAppTemplateKind =
   | 'quote'
   | 'payment';
 
-const E_PRIME_QUOTE_MESSAGE = `¡Hola! Qué gusto saludarte 👋 Somos el equipo de e-prime.
-Organizamos las ventas y el inventario de tu negocio dejándote un sistema fácil de usar en tu celular vestido con el logo y nombre de tu marca en menos de 48 horas. Además, un Gerente de nuestro equipo se reúne contigo para revisar tus números y ayudarte a ganar más plata.
+const E_PRIME_QUOTE_MESSAGE = `¡Hola! Qué gusto saludarte. Somos el equipo de E-prime.
+
+Organizamos las ventas y el inventario de tu negocio dejándote un sistema fácil de usar en tu celular vestido con el logo y nombre de tu marca. Además, un Gerente de nuestro equipo se reúne contigo para revisar tus ventas y ayudarte a aumentar tus ganancias.
+
 Tenemos 3 planes mensuales según qué tan seguido quieras reunirte con el Gerente:
-🔹 Plan Esencial — $150.000/mes
+
+*Plan Esencial — $150.000/mes*
 Sistema con tu marca + 1 reunión al mes (30 min) con un Gerente.
-⭐ Plan Crecimiento — $200.000/mes (Más elegido)
+
+*Plan Crecimiento — $200.000/mes (Más elegido)*
 Sistema con tu marca + 2 reuniones quincenales con un Gerente + alertas de inventario quieto.
-🔹 Plan Control Total — $300.000/mes
+
+*Plan Control Total — $300.000/mes*
 Sistema con tu marca + 4 reuniones semanales con un Gerente + hasta 2 cajas.
-🎁 Beneficio Cupo Fundador (Esta semana): El montaje inicial de todo tu catálogo normalmente vale $450.000, pero te sale 100% GRATIS arrancando con tus primeros 2 meses por adelantado. Con qué plan te gustaría que empezáramos o prefieres que hagamos una llamada rápida de 10 minutos para recomendarte el ideal?`;
+
+*Beneficio Cupo Fundador (Esta semana):*
+El montaje inicial de todo tu catálogo normalmente vale $450.000, pero te sale 100% GRATIS arrancando con tus primeros 2 meses por adelantado.
+
+¿Con qué plan te gustaría que empezáramos o prefieres que hagamos una llamada rápida de 10 minutos para recomendarte el ideal?`;
 
 function resolveSenderDisplayName(senderName?: string): string {
   const cleaned = (senderName || '').replace(/^HUD\s+/i, '').trim();
@@ -281,26 +290,26 @@ function buildClientStatusMessage(
 
   if (kind === 'welcome_diagnostic') {
     return (
-      `Hola ${clientName}, ¿cómo vas? Te saluda ${sender} del equipo de e-prime. ` +
-      `Ya tenemos todo listo para revisar cómo estás llevando hoy las cuentas de ${businessName}. ` +
-      `Agendemos una llamada corta de 15 minutos para conocer tus productos y mostrarte cómo te vamos a organizar todo. ` +
+      `Hola ${clientName}, ¿cómo vas? Te saluda ${sender} del equipo de e-prime.\n\n` +
+      `Ya tenemos todo listo para revisar cómo estás llevando hoy las cuentas de ${businessName}.\n\n` +
+      `Agendemos una llamada corta de 15 minutos para conocer tus productos y mostrarte cómo te vamos a organizar todo.\n\n` +
       `¿Te queda bien hoy a las [Hora] o mañana en la mañana?`
     );
   }
 
   if (kind === 'setup_day0') {
     return (
-      `¡Listo, ${clientName}! Ya recibimos el logo y los precios de ${businessName}. ` +
-      `Nuestro equipo ya empezó a montar tu sistema personalizado y a cargar tus productos con sus costos reales. ` +
-      `En menos de 48 horas te lo entregamos funcionando para que lo manejes desde tu celular. ` +
+      `¡Listo, ${clientName}! Ya recibimos el logo y los precios de ${businessName}.\n\n` +
+      `Nuestro equipo ya empezó a montar tu sistema personalizado y a cargar tus productos con sus costos reales.\n\n` +
+      `En menos de 48 horas te lo entregamos funcionando para que lo manejes desde tu celular.\n\n` +
       `Apenas quede listo te aviso por aquí para coordinar la entrega.`
     );
   }
 
   if (kind === 'ready_day2') {
     return (
-      `¡Buenas noticias, ${clientName}! Ya quedó listo el sistema de ${businessName} con tu logo, tus precios y tus costos cargados. ` +
-      `El siguiente paso es una sesión rápida de 15 minutos para entregártelo en tu celular y enseñarte cómo registrar ventas y cerrar caja en segundos. ` +
+      `¡Buenas noticias, ${clientName}! Ya quedó listo el sistema de ${businessName} con tu logo, tus precios y tus costos cargados.\n\n` +
+      `El siguiente paso es una sesión rápida de 15 minutos para entregártelo en tu celular y enseñarte cómo registrar ventas y cerrar caja en segundos.\n\n` +
       `¿A qué hora te queda bien hoy o mañana?`
     );
   }
@@ -310,9 +319,8 @@ function buildClientStatusMessage(
       ? formatDateFriendly(client.nextMeetingDate)
       : '[Fecha]';
     return (
-      `Hola ${clientName}, ¿cómo va todo con los registros en ${businessName}? ` +
-      `Te escribo para confirmar nuestra próxima sesión de 30 minutos con el Gerente de e-prime este ${meetingDate}, ` +
-      `donde vamos a revisar cuánto vendiste, qué te dejó más ganancia y cómo va tu inventario. ` +
+      `Hola ${clientName}, ¿cómo va todo con los registros en ${businessName}?\n\n` +
+      `Te escribo para confirmar nuestra próxima sesión de 30 minutos con el Gerente de e-prime este ${meetingDate}, donde vamos a revisar cuánto vendiste, qué te dejó más ganancia y cómo va tu inventario.\n\n` +
       `¿Te funciona ese día o prefieres que la movamos de horario?`
     );
   }

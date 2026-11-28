@@ -59,21 +59,32 @@ function sanitizePhone(phone: string): string {
   return String(phone || '').replace(/[^\d]/g, '');
 }
 
-function buildPendingClientTasksMessage(client: Client, steps: ClientProjectStep[]): string {
-  const pendingClientTasks = steps.flatMap((step) =>
-    step.tasks
-      .filter((t) => t.owner === 'client' && !t.completed)
-      .map((t) => `• ${t.title} (${step.title.split('·')[0].trim()})`)
+function buildWhatsAppUrl(phone: string, message: string): string {
+  const digits = sanitizePhone(phone);
+  const encoded = encodeURIComponent(message);
+  return digits
+    ? `https://wa.me/${digits}?text=${encoded}`
+    : `https://wa.me/?text=${encoded}`;
+}
+
+function buildStepPendingClientTasksMessage(
+  client: Client,
+  step: ClientProjectStep
+): string {
+  const pendingClientTasks = step.tasks.filter(
+    (t) => t.owner === 'client' && !t.completed
   );
   const businessName = client.company || client.projectName || 'tu negocio';
 
   if (pendingClientTasks.length === 0) {
-    return `¡Hola ${client.name}! Te cuento que ya tenemos todos tus pendientes completados para ${businessName}. Seguimos avanzando con el equipo de e-prime.`;
+    return `¡Hola ${client.name}! Te cuento que ya tenemos todos tus pendientes completados del ${step.title} para ${businessName}. Seguimos avanzando con el equipo de e-prime.`;
   }
 
+  const bulletList = pendingClientTasks.map((t) => `• ${t.title}`).join('\n');
+
   return (
-    `Hola ${client.name}, ¿cómo vas? Para seguir avanzando rápido con el sistema de ${businessName}, nos queda pendiente de tu parte:\n\n` +
-    `${pendingClientTasks.join('\n')}\n\n` +
+    `Hola ${client.name}, ¿cómo vas? Estamos trabajando en el *${step.title}* del sistema de ${businessName} y para continuar solo nos queda pendiente de tu parte:\n\n` +
+    `${bulletList}\n\n` +
     `Apenas lo tengas me lo pasas por aquí y seguimos de una.`
   );
 }
@@ -102,7 +113,7 @@ export const ClientProjectWorkspaceModal: React.FC<ClientProjectWorkspaceModalPr
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [copiedPending, setCopiedPending] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Sync if parent updates client from Supabase realtime
   useEffect(() => {
@@ -247,24 +258,34 @@ export const ClientProjectWorkspaceModal: React.FC<ClientProjectWorkspaceModalPr
     persistSteps(nextSteps);
   };
 
-  const pendingClientMessage = useMemo(
-    () => buildPendingClientTasksMessage(client, steps),
-    [client, steps]
+  const activeStep = useMemo(
+    () => steps.find((s) => s.id === metrics.currentStage) || steps[0],
+    [steps, metrics.currentStage]
   );
 
-  const pendingWaUrl = useMemo(() => {
-    const digits = sanitizePhone(client.phone);
-    const encoded = encodeURIComponent(pendingClientMessage);
-    return digits
-      ? `https://wa.me/${digits}?text=${encoded}`
-      : `https://wa.me/?text=${encoded}`;
-  }, [client.phone, pendingClientMessage]);
+  const activeStepPendingCount = useMemo(
+    () =>
+      activeStep
+        ? activeStep.tasks.filter((t) => t.owner === 'client' && !t.completed).length
+        : 0,
+    [activeStep]
+  );
 
-  const handleCopyPending = async () => {
+  const activeStepPendingMessage = useMemo(
+    () => (activeStep ? buildStepPendingClientTasksMessage(client, activeStep) : ''),
+    [client, activeStep]
+  );
+
+  const activeStepWaUrl = useMemo(
+    () => buildWhatsAppUrl(client.phone, activeStepPendingMessage),
+    [client.phone, activeStepPendingMessage]
+  );
+
+  const handleCopyText = async (key: string, text: string) => {
     try {
-      await navigator.clipboard.writeText(pendingClientMessage);
-      setCopiedPending(true);
-      setTimeout(() => setCopiedPending(false), 1800);
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1800);
     } catch {
       // Ignore clipboard permission errors
     }
@@ -367,30 +388,35 @@ export const ClientProjectWorkspaceModal: React.FC<ClientProjectWorkspaceModalPr
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <a
-                href={pendingWaUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap"
-                title="Enviar por WhatsApp solo las tareas pendientes asignadas al cliente"
-              >
-                <MessageCircle className="w-3.5 h-3.5" />
-                <span>WA Pendientes Cliente</span>
-              </a>
-              <button
-                type="button"
-                onClick={handleCopyPending}
-                className="p-1.5 rounded-lg bg-[#0A0D14] hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
-                title="Copiar lista de pendientes del cliente"
-              >
-                {copiedPending ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                ) : (
-                  <Copy className="w-3.5 h-3.5" />
-                )}
-              </button>
-            </div>
+            {activeStep && (
+              <div className="flex items-center gap-1.5">
+                <a
+                  href={activeStepWaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap"
+                  title={`Enviar por WhatsApp solo las tareas pendientes del cliente del Paso ${activeStep.stepNumber}`}
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  <span>
+                    WA Pendientes · Paso {activeStep.stepNumber}
+                    {activeStepPendingCount > 0 ? ` (${activeStepPendingCount})` : ''}
+                  </span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText('active-step', activeStepPendingMessage)}
+                  className="p-1.5 rounded-lg bg-[#0A0D14] hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
+                  title={`Copiar pendientes del cliente del Paso ${activeStep.stepNumber}`}
+                >
+                  {copiedKey === 'active-step' ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            )}
           </div>
 
           {saveError && (
@@ -415,6 +441,13 @@ export const ClientProjectWorkspaceModal: React.FC<ClientProjectWorkspaceModalPr
                 : step.tasks.filter((t) => t.owner === ownerFilter);
 
             const draftOwner: ProjectTaskOwner = newTaskOwner[step.id] || 'me';
+            const isCurrentStep = activeStep?.id === step.id;
+            const stepPendingClientCount = step.tasks.filter(
+              (t) => t.owner === 'client' && !t.completed
+            ).length;
+            const stepPendingMessage = buildStepPendingClientTasksMessage(client, step);
+            const stepWaUrl = buildWhatsAppUrl(client.phone, stepPendingMessage);
+            const stepCopyKey = `step-wa-${step.id}`;
 
             return (
               <div
@@ -422,6 +455,8 @@ export const ClientProjectWorkspaceModal: React.FC<ClientProjectWorkspaceModalPr
                 className={`rounded-2xl border transition-colors overflow-hidden ${
                   isStepDone
                     ? 'bg-[#101827]/90 border-emerald-500/40'
+                    : isCurrentStep
+                    ? 'bg-[#101827]/90 border-[#00F0FF]/45'
                     : 'bg-[#101827]/90 border-slate-800'
                 }`}
               >
@@ -463,6 +498,11 @@ export const ClientProjectWorkspaceModal: React.FC<ClientProjectWorkspaceModalPr
                         >
                           {step.title}
                         </h3>
+                        {isCurrentStep && !isStepDone && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/40">
+                            En curso
+                          </span>
+                        )}
                         <span
                           className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-md border tabular-nums ${
                             isStepDone
@@ -503,9 +543,44 @@ export const ClientProjectWorkspaceModal: React.FC<ClientProjectWorkspaceModalPr
                   </button>
                 </div>
 
-                {/* Step Content: Tasks + Add Task + Notes/Conversations */}
+                {/* Step Content: Per-Step WA Button + Tasks + Add Task + Notes/Conversations */}
                 {isExpanded && (
                   <div className="p-4 space-y-4 border-t border-slate-800/80">
+                    {/* Per-step WhatsApp button strictly for THIS step's client pending tasks */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-800/60">
+                      <span className="text-[11px] text-slate-400">
+                        {stepPendingClientCount > 0
+                          ? `Pendientes del cliente en este paso: ${stepPendingClientCount}`
+                          : 'Sin tareas pendientes del cliente en este paso'}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <a
+                          href={stepWaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 text-[11px] font-bold flex items-center gap-1.5 whitespace-nowrap"
+                          title={`Enviar solo los pendientes del Paso ${step.stepNumber} al cliente`}
+                        >
+                          <MessageCircle className="w-3 h-3" />
+                          <span>
+                            WA Paso {step.stepNumber}
+                            {stepPendingClientCount > 0 ? ` (${stepPendingClientCount})` : ''}
+                          </span>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText(stepCopyKey, stepPendingMessage)}
+                          className="p-1.5 rounded-lg bg-[#0A0D14] hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
+                          title={`Copiar mensaje del Paso ${step.stepNumber}`}
+                        >
+                          {copiedKey === stepCopyKey ? (
+                            <Check className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
                     {/* Tasks Checklist */}
                     <div className="space-y-2">
                       {visibleTasks.length > 0 ? (
